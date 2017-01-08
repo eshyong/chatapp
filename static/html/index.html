@@ -1,10 +1,22 @@
 <html>
   <head>
-    <script src="static/js/main.js"></script>
-    <title>My Home Page</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.1.1/jquery.min.js"></script>
+    <script src="static/js/index.js"></script>
+    <link rel="stylesheet" href="static/css/index.css">
+    <title>Chat app</title>
   </head>
-  <h1>Hello, world</h1>
   <body>
-    This is my home page
+    <div class="container">
+      <h2>Chat app</h2>
+      <input class="username-submit" type="text" placeholder="Enter your username here">
+      <div class="chat-container" style="display: none">
+        <div class="chat-window">
+          <div class="chat-messages"></div>
+        </div>
+        <div class="chatbox">
+          <input type="text" placeholder="Type here! Press enter to send">
+        </div>
+      </div>
+    </div>
   </body>
 </html>
