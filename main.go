@@ -63,8 +63,10 @@ func (c *ChatServer) acceptChatConnection(w http.ResponseWriter, r *http.Request
 	}
 
 	newUser := c.chatRoom.authenticateUser(conn)
-	c.chatRoom.chatUsers = append(c.chatRoom.chatUsers, newUser)
-	go c.chatRoom.createUserSession(newUser)
+	if newUser != nil {
+		c.chatRoom.chatUsers = append(c.chatRoom.chatUsers, newUser)
+		go c.chatRoom.createUserSession(newUser)
+	}
 }
 
 // TODO: create a real chat protocol
@@ -77,7 +79,7 @@ func (c *ChatRoom) authenticateUser(conn *websocket.Conn) *ChatUser {
 	if err != nil {
 		log.Println("Unable to authenticate user. Error:")
 		log.Println(err)
-		return
+		return nil
 	}
 
 	// Create a new user
