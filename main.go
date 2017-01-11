@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"github.com/gorilla/websocket"
 	"log"
+	"errors"
 )
 
 type ChatServer struct {
@@ -61,45 +62,50 @@ func (c *ChatServer) acceptChatConnection(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	c.chatRoom.handleUser(conn)
+	newUser := c.chatRoom.authenticateUser(conn)
+	c.chatRoom.chatUsers = append(c.chatRoom.chatUsers, newUser)
+	go c.chatRoom.createUserSession(newUser)
 }
 
 // TODO: create a real chat protocol
-func (c *ChatRoom) handleUser(conn *websocket.Conn) {
+func (c *ChatRoom) authenticateUser(conn *websocket.Conn) *ChatUser {
 	log.Println("User connected from " + conn.RemoteAddr().String())
 	messageType, message, err := conn.ReadMessage()
-	if err != nil || messageType != websocket.TextMessage {
+	if messageType != websocket.TextMessage {
+		err = errors.New("Required text message, got binary message instead")
+	}
+	if err != nil {
 		log.Println("Unable to authenticate user. Error:")
 		log.Println(err)
 		return
 	}
-	name := string(message)
-	log.Println("Authenticated user: " + name)
+
+	// Create a new user
 	chatUser := &ChatUser{
-		userName: name,
+		userName: string(message),
 		userConn: conn,
 	}
-	c.chatUsers = append(c.chatUsers, chatUser)
+	log.Println("Authenticated user: " + chatUser.userName)
+	return chatUser
+}
 
-	// Handle user connections in a separate goroutine
-	go func() {
-		defer conn.Close()
-		for {
-			messageType, message, err := conn.ReadMessage()
-			if err != nil {
-				log.Println(err)
-				break
-			}
-
-			if messageType != websocket.TextMessage {
-				// Send an error to the user
-				chatUser.userConn.WriteMessage(websocket.TextMessage, []byte("Unable to handle binary messages"))
-				continue
-			}
-
-			c.broadcastMessage(chatUser.userName, message)
+func (c *ChatRoom) createUserSession(chatUser *ChatUser) {
+	defer chatUser.userConn.Close()
+	for {
+		messageType, message, err := chatUser.userConn.ReadMessage()
+		if err != nil {
+			log.Println(err)
+			break
 		}
-	}()
+
+		if messageType != websocket.TextMessage {
+			// Send an error to the user
+			chatUser.userConn.WriteMessage(websocket.TextMessage, []byte("Unable to handle binary messages"))
+			continue
+		}
+
+		c.broadcastMessage(chatUser.userName, message)
+	}
 }
 
 func (c *ChatRoom) broadcastMessage(sender string, message []byte) {
