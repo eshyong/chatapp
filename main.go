@@ -8,7 +8,7 @@ import (
 	"log"
 )
 
-type ChatApp struct {
+type ChatServer struct {
 	router *mux.Router
 	chatRoom *ChatRoom
 	upgrader *websocket.Upgrader
@@ -27,7 +27,7 @@ type ChatRoom struct {
 const staticDir = "/static/"
 
 func main() {
-	chatApp := &ChatApp{
+	chatServer := &ChatServer{
 		chatRoom: &ChatRoom{},
 		upgrader: &websocket.Upgrader{
 			ReadBufferSize: 1024,
@@ -35,14 +35,14 @@ func main() {
 		},
 		staticFilesPath: filepath.Join(".", staticDir),
 	}
-	http.Handle("/", chatApp.setupRouter())
+	http.Handle("/", chatServer.setupRouter())
 
 	addr := ":8080"
 	log.Println("Starting server on " + addr)
 	http.ListenAndServe(addr, nil)
 }
 
-func (c *ChatApp) setupRouter() *mux.Router {
+func (c *ChatServer) setupRouter() *mux.Router {
 	r := mux.NewRouter()
 	r.PathPrefix(staticDir).Handler(http.StripPrefix(staticDir, http.FileServer(http.Dir(c.staticFilesPath))))
 	r.HandleFunc("/", c.serveHomePage)
@@ -50,11 +50,11 @@ func (c *ChatApp) setupRouter() *mux.Router {
 	return r
 }
 
-func (c *ChatApp) serveHomePage(w http.ResponseWriter, r *http.Request) {
+func (c *ChatServer) serveHomePage(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, filepath.Join(c.staticFilesPath, "html", "index.html"))
 }
 
-func (c *ChatApp) acceptChatConnection(w http.ResponseWriter, r *http.Request) {
+func (c *ChatServer) acceptChatConnection(w http.ResponseWriter, r *http.Request) {
 	conn, err := c.upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Println(err)
