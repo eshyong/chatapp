@@ -8,45 +8,11 @@ import (
 	"log"
 )
 
-const staticDir = "/static/"
-var fileServerPath = filepath.Join(".", staticDir)
-var upgrader = websocket.Upgrader{
-	ReadBufferSize: 1024,
-	WriteBufferSize: 1024,
-}
-var chatRoom = &ChatRoom{
-	chatUsers: []*ChatUser{},
-}
-
-func main() {
-	router := setupRoutes()
-	http.Handle("/", router)
-
-	addr := ":8080"
-	log.Println("Starting server on " + addr)
-	http.ListenAndServe(addr, nil)
-}
-
-func setupRoutes() *mux.Router {
-	r := mux.NewRouter()
-	r.PathPrefix(staticDir).Handler(http.StripPrefix(staticDir, http.FileServer(http.Dir(fileServerPath))))
-	r.HandleFunc("/", serveHomePage)
-	r.HandleFunc("/chat-room", acceptChatConnection)
-	return r
-}
-
-func serveHomePage(w http.ResponseWriter, r *http.Request) {
-	http.ServeFile(w, r, filepath.Join(fileServerPath, "html", "index.html"))
-}
-
-func acceptChatConnection(w http.ResponseWriter, r *http.Request) {
-	conn, err := upgrader.Upgrade(w, r, nil)
-	if err != nil {
-		log.Println(err)
-		return
-	}
-
-	chatRoom.handleUser(conn)
+type ChatApp struct {
+	router *mux.Router
+	chatRoom *ChatRoom
+	upgrader *websocket.Upgrader
+	staticFilesPath string
 }
 
 type ChatUser struct {
@@ -56,6 +22,46 @@ type ChatUser struct {
 
 type ChatRoom struct {
 	chatUsers []*ChatUser
+}
+
+const staticDir = "/static/"
+
+func main() {
+	chatApp := &ChatApp{
+		chatRoom: &ChatRoom{},
+		upgrader: &websocket.Upgrader{
+			ReadBufferSize: 1024,
+			WriteBufferSize: 1024,
+		},
+		staticFilesPath: filepath.Join(".", staticDir),
+	}
+	http.Handle("/", chatApp.setupRouter())
+
+	addr := ":8080"
+	log.Println("Starting server on " + addr)
+	http.ListenAndServe(addr, nil)
+}
+
+func (c *ChatApp) setupRouter() *mux.Router {
+	r := mux.NewRouter()
+	r.PathPrefix(staticDir).Handler(http.StripPrefix(staticDir, http.FileServer(http.Dir(c.staticFilesPath))))
+	r.HandleFunc("/", c.serveHomePage)
+	r.HandleFunc("/chat-room", c.acceptChatConnection)
+	return r
+}
+
+func (c *ChatApp) serveHomePage(w http.ResponseWriter, r *http.Request) {
+	http.ServeFile(w, r, filepath.Join(c.staticFilesPath, "html", "index.html"))
+}
+
+func (c *ChatApp) acceptChatConnection(w http.ResponseWriter, r *http.Request) {
+	conn, err := c.upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+
+	c.chatRoom.handleUser(conn)
 }
 
 // TODO: create a real chat protocol
@@ -96,11 +102,11 @@ func (c *ChatRoom) handleUser(conn *websocket.Conn) {
 	}()
 }
 
-func (c *ChatRoom) broadcastMessage(from string, message []byte) {
-	log.Println("Sending message from: " + from)
+func (c *ChatRoom) broadcastMessage(sender string, message []byte) {
+	log.Println("Sending message from: " + sender)
 	for _, user := range c.chatUsers {
 		// Avoid broadcasting message to sender
-		if user.userName != from {
+		if user.userName != sender {
 			log.Println("Sending message to: " + user.userName)
 			if err := user.userConn.WriteMessage(websocket.TextMessage, message); err != nil {
 				log.Println("Unable to send message to " + user.userName)
