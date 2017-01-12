@@ -40,7 +40,7 @@ func main() {
 
 	addr := ":8080"
 	log.Println("Starting server on " + addr)
-	http.ListenAndServe(addr, nil)
+	log.Fatalln(http.ListenAndServe(addr, nil))
 }
 
 func (c *ChatServer) setupRouter() *mux.Router {
