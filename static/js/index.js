@@ -22,7 +22,7 @@ $(document).ready(function () {
 
     function createChatConnection() {
         if (!window.WebSocket) {
-            console.log("Your browser doesn't support WebSockets, sorry");
+            console.log('Sorry, this app currently only works on WebSocket-enabled browsers.');
             return;
         }
 
@@ -33,7 +33,7 @@ $(document).ready(function () {
             var message = event.data;
 
             console.log('Server said: ' + event.data);
-            chatMessages.append('<div class="chat-message">' + message + '</div>');
+            appendChatMessage(message);
             chatWindow.scrollTop(chatMessages.height());
         };
         chatConn.onopen = function() {
@@ -60,8 +60,12 @@ $(document).ready(function () {
         // Display message, scroll to bottom, and clear chatbox
         message = username + ': ' + contents;
         chatConn.send(message);
-        chatMessages.append('<div class="chat-message">' + message + '</div>');
+        appendChatMessage(message);
         chatWindow.scrollTop(chatMessages.height());
         chatBox.val('');
     });
+
+    function appendChatMessage(message) {
+        $('.chat-messages').append('<div class="chat-message">' + message + '</div>')
+    }
 });
