@@ -1,18 +1,18 @@
 package main
 
 import (
+	"errors"
 	"github.com/gorilla/mux"
-	"net/http"
-	"path/filepath"
 	"github.com/gorilla/websocket"
 	"log"
-	"errors"
+	"net/http"
+	"path/filepath"
 )
 
 type ChatServer struct {
-	router *mux.Router
-	chatRoom *ChatRoom
-	upgrader *websocket.Upgrader
+	router          *mux.Router
+	chatRoom        *ChatRoom
+	upgrader        *websocket.Upgrader
 	staticFilesPath string
 }
 
@@ -31,7 +31,7 @@ func main() {
 	chatServer := &ChatServer{
 		chatRoom: &ChatRoom{},
 		upgrader: &websocket.Upgrader{
-			ReadBufferSize: 1024,
+			ReadBufferSize:  1024,
 			WriteBufferSize: 1024,
 		},
 		staticFilesPath: filepath.Join(".", staticDir),
