@@ -6,10 +6,17 @@ body {
     font-size: large;
 }
 
-input {
+input[type=text] {
     width: 50%;
-    height: 30px;
+    height: 20px;
     font-size: large;
+    margin: 3px;
+    border-radius: 5px;
+    border-width: 1px;
+}
+
+input[type=button] {
+    display: block;
 }
 
 .container {
