@@ -39,12 +39,21 @@ func (c *ChatServer) SetupRouter() *mux.Router {
 	r := mux.NewRouter()
 	r.PathPrefix(staticDir).Handler(http.StripPrefix(staticDir, http.FileServer(http.Dir(c.staticFilesPath))))
 	r.HandleFunc("/", c.serveHomePage)
+	r.HandleFunc("/login", c.serveLoginPage)
 	r.HandleFunc("/chat-room", c.acceptChatConnection)
 	return r
 }
 
 func (c *ChatServer) serveHomePage(w http.ResponseWriter, r *http.Request) {
-	http.ServeFile(w, r, filepath.Join(c.staticFilesPath, "html", "index.html"))
+	c.serveHtmlPage(w, r, "index")
+}
+
+func (c *ChatServer) serveLoginPage(w http.ResponseWriter, r *http.Request) {
+	c.serveHtmlPage(w, r, "login")
+}
+
+func (c *ChatServer) serveHtmlPage(w http.ResponseWriter, r *http.Request, name string) {
+	http.ServeFile(w, r, filepath.Join(c.staticFilesPath, "html", name+".html"))
 }
 
 func (c *ChatServer) acceptChatConnection(w http.ResponseWriter, r *http.Request) {
