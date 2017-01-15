@@ -1,7 +1,6 @@
 package main
 
 import (
-	"database/sql"
 	"log"
 	"net/http"
 
@@ -10,18 +9,6 @@ import (
 )
 
 func main() {
-	db, err := sql.Open("postgres", "postgres://localhost/postgres?sslmode=disable")
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	var user string
-	err = db.QueryRow("SELECT current_user").Scan(&user)
-	if err != nil {
-		log.Fatal(err)
-	}
-	log.Println(user)
-
 	chatServer := chatserver.NewDefaultServer()
 	http.Handle("/", chatServer.SetupRouter())
 
