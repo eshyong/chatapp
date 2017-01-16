@@ -9,12 +9,10 @@ if [ ! -d data ]; then
 fi
 
 # Parse command line arguments
-if [ "$1" = "start" ]; then
-    brew services start postgresql
-elif [ "$1" = "stop" ]; then
-    brew services stop postgresql
-elif [ "$1" = "restart" ]; then
-    brew services restart postgresql
+if [ "$1" = "start" ] || [ "$1" = "stop" ] || [ "$1" = "restart" ]; then
+    brew services "$1" postgresql
+elif [ -z "$1" ]; then
+    echo "Usage: ./postgres.sh start|stop|restart"
 else
     echo Unknown argument "$1"
 fi
