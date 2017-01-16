@@ -1,0 +1,22 @@
+input.username-submit {
+    width: 50%;
+}
+
+.container {
+
+}
+
+.chat-container {
+    width: 50%;
+    height: 300px;
+}
+
+.chat-window {
+    height: 80%;
+    max-height: 80%;
+    overflow-y: scroll;
+    overflow-x: hidden;
+}
+
+.chatbox {
+}
