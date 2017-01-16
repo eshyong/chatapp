@@ -2,10 +2,6 @@ input.username-submit {
     width: 50%;
 }
 
-.container {
-
-}
-
 .chat-container {
     width: 50%;
     height: 300px;
@@ -17,7 +13,4 @@ input.username-submit {
     overflow-y: scroll;
     overflow-x: hidden;
     word-wrap: break-word;
-}
-
-.chatbox {
 }
