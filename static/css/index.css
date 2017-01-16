@@ -16,6 +16,7 @@ input.username-submit {
     max-height: 80%;
     overflow-y: scroll;
     overflow-x: hidden;
+    word-wrap: break-word;
 }
 
 .chatbox {
