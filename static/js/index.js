@@ -26,7 +26,7 @@ $(document).ready(function () {
             return;
         }
 
-        chatConn = new window.WebSocket('ws://' + window.location.host + '/chat-room');
+        chatConn = new window.WebSocket('wss://' + window.location.host + '/chat-room');
         chatConn.onmessage = function(event) {
             var chatMessages = $('.chat-messages');
             var chatWindow = $('.chat-window');
