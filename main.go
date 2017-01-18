@@ -4,10 +4,8 @@ import (
 	"crypto/tls"
 	"log"
 	"net/http"
-
-	"time"
-
 	"os"
+	"time"
 
 	"github.com/eshyong/chatapp/chatserver"
 	_ "github.com/lib/pq"
