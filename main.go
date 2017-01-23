@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/eshyong/chatapp/chatserver"
+	"github.com/eshyong/chatapp/chat"
 )
 
 func main() {
@@ -50,13 +50,13 @@ func runAppServer(wg *sync.WaitGroup, httpsPort string) {
 	}
 
 	// App setup
-	chatServer := chatserver.NewDefaultServer()
+	app := chat.NewApp()
 	server := &http.Server{
 		Addr:         ":" + httpsPort,
 		ReadTimeout:  5 * time.Second,
 		WriteTimeout: 10 * time.Second,
 		TLSConfig:    tlsConfig,
-		Handler:      chatServer.SetupRouter(),
+		Handler:      app.SetupRouter(),
 	}
 	log.Println("Starting HTTPS server on " + server.Addr)
 	if err := server.ListenAndServeTLS(certFile, keyFile); err != nil {

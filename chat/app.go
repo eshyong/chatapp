@@ -1,4 +1,4 @@
-package chatserver
+package chat
 
 import (
 	"errors"
@@ -12,7 +12,7 @@ import (
 
 const staticDir = "/static/"
 
-type ChatServer struct {
+type Application struct {
 	router          *mux.Router
 	chatUsers       []*ChatUser
 	upgrader        *websocket.Upgrader
@@ -24,8 +24,8 @@ type ChatUser struct {
 	userConn *websocket.Conn
 }
 
-func NewDefaultServer() *ChatServer {
-	return &ChatServer{
+func NewApp() *Application {
+	return &Application{
 		chatUsers: []*ChatUser{},
 		upgrader: &websocket.Upgrader{
 			ReadBufferSize:  1024,
@@ -35,43 +35,43 @@ func NewDefaultServer() *ChatServer {
 	}
 }
 
-func (c *ChatServer) SetupRouter() *mux.Router {
+func (a *Application) SetupRouter() *mux.Router {
 	r := mux.NewRouter()
-	r.PathPrefix(staticDir).Handler(http.StripPrefix(staticDir, http.FileServer(http.Dir(c.staticFilesPath))))
-	r.HandleFunc("/", c.serveHomePage)
-	r.HandleFunc("/login", c.serveLoginPage)
-	r.HandleFunc("/chat-room", c.acceptChatConnection)
+	r.PathPrefix(staticDir).Handler(http.StripPrefix(staticDir, http.FileServer(http.Dir(a.staticFilesPath))))
+	r.HandleFunc("/", a.serveHomePage)
+	r.HandleFunc("/login", a.serveLoginPage)
+	r.HandleFunc("/chat-room", a.acceptChatConnection)
 	return r
 }
 
-func (c *ChatServer) serveHomePage(w http.ResponseWriter, r *http.Request) {
-	c.serveHtmlPage(w, r, "index")
+func (a *Application) serveHomePage(w http.ResponseWriter, r *http.Request) {
+	a.serveHtmlPage(w, r, "index")
 }
 
-func (c *ChatServer) serveLoginPage(w http.ResponseWriter, r *http.Request) {
-	c.serveHtmlPage(w, r, "login")
+func (a *Application) serveLoginPage(w http.ResponseWriter, r *http.Request) {
+	a.serveHtmlPage(w, r, "login")
 }
 
-func (c *ChatServer) serveHtmlPage(w http.ResponseWriter, r *http.Request, name string) {
-	http.ServeFile(w, r, filepath.Join(c.staticFilesPath, "html", name+".html"))
+func (a *Application) serveHtmlPage(w http.ResponseWriter, r *http.Request, name string) {
+	http.ServeFile(w, r, filepath.Join(a.staticFilesPath, "html", name+".html"))
 }
 
-func (c *ChatServer) acceptChatConnection(w http.ResponseWriter, r *http.Request) {
-	conn, err := c.upgrader.Upgrade(w, r, nil)
+func (a *Application) acceptChatConnection(w http.ResponseWriter, r *http.Request) {
+	conn, err := a.upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Println(err)
 		return
 	}
 
-	newUser := c.authenticateUser(conn)
+	newUser := a.authenticateUser(conn)
 	if newUser != nil {
-		c.chatUsers = append(c.chatUsers, newUser)
-		go c.createUserSession(newUser)
+		a.chatUsers = append(a.chatUsers, newUser)
+		go a.createUserSession(newUser)
 	}
 }
 
 // TODO: create a real chat protocol
-func (c *ChatServer) authenticateUser(conn *websocket.Conn) *ChatUser {
+func (a *Application) authenticateUser(conn *websocket.Conn) *ChatUser {
 	log.Println("User connected from " + conn.RemoteAddr().String())
 	messageType, message, err := conn.ReadMessage()
 	if messageType != websocket.TextMessage {
@@ -92,7 +92,7 @@ func (c *ChatServer) authenticateUser(conn *websocket.Conn) *ChatUser {
 	return chatUser
 }
 
-func (c *ChatServer) createUserSession(chatUser *ChatUser) {
+func (a *Application) createUserSession(chatUser *ChatUser) {
 	defer chatUser.userConn.Close()
 	for {
 		messageType, message, err := chatUser.userConn.ReadMessage()
@@ -107,13 +107,13 @@ func (c *ChatServer) createUserSession(chatUser *ChatUser) {
 			continue
 		}
 
-		c.broadcastMessage(chatUser.userName, message)
+		a.broadcastMessage(chatUser.userName, message)
 	}
 }
 
-func (c *ChatServer) broadcastMessage(sender string, message []byte) {
+func (a *Application) broadcastMessage(sender string, message []byte) {
 	log.Println("Sending message from: " + sender)
-	for _, user := range c.chatUsers {
+	for _, user := range a.chatUsers {
 		// Avoid broadcasting message to sender
 		if user.userName != sender {
 			log.Println("Sending message to: " + user.userName)
