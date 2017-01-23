@@ -3,20 +3,23 @@
 <head>
   <meta charset="UTF-8">
   <script src="static/js/jquery-3.1.1.min.js"></script>
+  <script src="static/js/login.js"></script>
   <link rel="stylesheet" href="static/css/main.css">
   <title>Chat app</title>
 </head>
 <body>
-  <form>
-    <h2>Login here</h2>
-    <input type="text" placeholder="Username"/>
-    <input type="text" placeholder="Password"/>
-    <input id="login-button" type="button" value="Login"/>
-    <h2>Or, if this is your first time, register here</h2>
-    <input type="text" placeholder="Choose a username"/>
-    <input type="text" placeholder="Choose a password"/>
-    <input type="text" placeholder="Re-enter your password"/>
-    <input id="register-button" type="button" value="Register"/>
-  </form>
+    <div>
+      <h2>Login here</h2>
+      <input type="text" placeholder="Username"/>
+      <input type="password" placeholder="Password"/>
+      <input id="login-button" type="button" value="Login"/>
+    </div>
+    <div id="register">
+      <h2>Or, if this is your first time, register here</h2>
+      <input class="username" type="text" placeholder="Choose a username"/>
+      <input class="password" type="password" placeholder="Choose a password"/>
+      <input class="confirmation" type="password" placeholder="Re-enter your password"/>
+      <input id="register-button" type="button" value="Register"/>
+    </div>
 </body>
 </html>
