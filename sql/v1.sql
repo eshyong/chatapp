@@ -4,7 +4,7 @@ SET SCHEMA 'data';
 
 CREATE TABLE IF NOT EXISTS chat_users (
     id serial PRIMARY KEY,
-    username varchar(64),
+    username varchar(64) UNIQUE,
     hashed_password varchar(1024)
 );
 
