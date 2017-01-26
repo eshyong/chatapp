@@ -31,7 +31,7 @@ type ChatUser struct {
 	userConn *websocket.Conn
 }
 
-type loginRequest struct {
+type UserCreds struct {
 	UserName string
 	Password string
 }
@@ -56,18 +56,19 @@ func NewApp() *Application {
 func (a *Application) SetupRouter() *mux.Router {
 	r := mux.NewRouter()
 	r.PathPrefix(staticDir).Handler(http.StripPrefix(staticDir, http.FileServer(http.Dir(a.staticFilesPath))))
-	r.HandleFunc("/", a.serveHomePage)
-	r.HandleFunc("/login", a.handleLoginPage)
-	r.HandleFunc("/register", a.handleRegistration)
-	r.HandleFunc("/chat-room", a.acceptChatConnection)
+	r.HandleFunc("/", a.serveHomePage).Methods("GET")
+	r.HandleFunc("/login", a.handleLogin).Methods("GET", "POST")
+	r.HandleFunc("/register", a.handleRegistration).Methods("POST")
+	r.HandleFunc("/chat-room", a.acceptChatConnection).Methods("GET")
 	return r
 }
 
 func (a *Application) serveHomePage(w http.ResponseWriter, r *http.Request) {
+	log.Println("GET /")
 	a.serveHtmlPage(w, r, "index")
 }
 
-func (a *Application) handleLoginPage(w http.ResponseWriter, r *http.Request) {
+func (a *Application) handleLogin(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "GET":
 		a.serveLoginPage(w, r)
@@ -79,15 +80,117 @@ func (a *Application) handleLoginPage(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *Application) serveLoginPage(w http.ResponseWriter, r *http.Request) {
+	log.Println("GET /login")
 	a.serveHtmlPage(w, r, "login")
-}
-
-func (a *Application) loginUser(w http.ResponseWriter, r *http.Request) {
-	// TODO
 }
 
 func (a *Application) serveHtmlPage(w http.ResponseWriter, r *http.Request, name string) {
 	http.ServeFile(w, r, filepath.Join(a.staticFilesPath, "html", name+".html"))
+}
+
+func (a *Application) loginUser(w http.ResponseWriter, r *http.Request) {
+	log.Println("POST /login")
+	requestCreds, err := readUserCreds(r)
+	if err != nil {
+		log.Println(err)
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	storedCreds, err := a.findUserByName(requestCreds.UserName)
+	if err != nil {
+		log.Println(err)
+		if pqErr, ok := err.(*pq.Error); ok {
+			log.Println(pqErr.Code.Name())
+		}
+		if err == sql.ErrNoRows {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	hashedPassword := storedCreds.Password
+	if err := bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(requestCreds.Password)); err != nil {
+		log.Println(err)
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	http.Redirect(w, r, "/", http.StatusMovedPermanently)
+}
+
+func (a *Application) findUserByName(userName string) (*UserCreds, error) {
+	u := &UserCreds{}
+	err := a.dbConn.QueryRow(
+		"SELECT username, hashed_password FROM data.chat_users WHERE username = $1",
+		userName,
+	).Scan(&u.UserName, &u.Password)
+	if err != nil {
+		return nil, err
+	}
+	return u, nil
+}
+
+func (a *Application) handleRegistration(w http.ResponseWriter, r *http.Request) {
+	log.Println("POST /register")
+	userCreds, err := readUserCreds(r)
+	if err != nil {
+		log.Println(err)
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	if err := a.registerUser(userCreds); err != nil {
+		log.Println(err)
+		if pqErr, ok := err.(*pq.Error); ok {
+			log.Println(pqErr.Code.Name())
+			if pqErr.Code.Name() == "unique_violation" {
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+		}
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	// Redirect to index page on success
+	//createUserSession(w)
+	http.Redirect(w, r, "/", http.StatusMovedPermanently)
+}
+
+func readUserCreds(r *http.Request) (*UserCreds, error) {
+	body, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		// Probably EOF errors, according to golang docs
+		return nil, err
+	}
+
+	u := &UserCreds{}
+	if err := json.Unmarshal(body, u); err != nil {
+		return nil, err
+	}
+	return u, nil
+}
+
+func (a *Application) registerUser(l *UserCreds) error {
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(l.Password), bcrypt.DefaultCost)
+	if err != nil {
+		return errors.New("bcrypt hash failed")
+	}
+
+	result, err := a.dbConn.Exec(
+		"INSERT INTO data.chat_users (username, hashed_password) VALUES ($1, $2)",
+		l.UserName, string(hashedPassword))
+	if err != nil {
+		return err
+	}
+
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected != 1 {
+		return errors.New("Unable to create new user. Please try again")
+	}
+	return nil
 }
 
 func (a *Application) acceptChatConnection(w http.ResponseWriter, r *http.Request) {
@@ -102,54 +205,6 @@ func (a *Application) acceptChatConnection(w http.ResponseWriter, r *http.Reques
 		a.chatUsers = append(a.chatUsers, newUser)
 		go a.createUserSession(newUser)
 	}
-}
-
-func (a *Application) handleRegistration(w http.ResponseWriter, r *http.Request) {
-	log.Println("Got register request")
-	body, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		// Probably EOF errors, according to golang docs
-		log.Println(err)
-		return
-	}
-
-	l := &loginRequest{}
-	if err := json.Unmarshal(body, l); err != nil {
-		log.Println(err)
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-	if err := a.registerUser(l); err != nil {
-		log.Println(err)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	// Redirect to index page on success
-	http.Redirect(w, r, "/", http.StatusPermanentRedirect)
-}
-
-func (a *Application) registerUser(l *loginRequest) error {
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(l.Password), bcrypt.DefaultCost)
-	if err != nil {
-		return errors.New("bcrypt hash failed")
-	}
-
-	result, err := a.dbConn.Exec(
-		"INSERT INTO data.chat_users (username, hashed_password) VALUES ($1, $2)",
-		l.UserName, string(hashedPassword))
-	if err != nil {
-		if pqErr, ok := err.(*pq.Error); ok {
-			log.Println(pqErr.Code.Name())
-		}
-		return err
-	}
-
-	rowsAffected, _ := result.RowsAffected()
-	if rowsAffected != 1 {
-		return errors.New("Unable to create new user. Please try again")
-	}
-	return nil
 }
 
 // TODO: create a real chat protocol
