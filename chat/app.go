@@ -10,20 +10,26 @@ import (
 	"path/filepath"
 
 	"github.com/gorilla/mux"
+	"github.com/gorilla/securecookie"
 	"github.com/gorilla/websocket"
 	"github.com/lib/pq"
 	_ "github.com/lib/pq"
 	"golang.org/x/crypto/bcrypt"
 )
 
-const staticDir = "/static/"
+const (
+	staticDir = "/static/"
+	// 15 minutes
+	cookieMaxAge = 900
+)
 
 type Application struct {
+	chatUsers       []*ChatUser
 	dbConn          *sql.DB
 	router          *mux.Router
-	chatUsers       []*ChatUser
-	upgrader        *websocket.Upgrader
+	secureCookie    *securecookie.SecureCookie
 	staticFilesPath string
+	upgrader        *websocket.Upgrader
 }
 
 type ChatUser struct {
@@ -36,20 +42,26 @@ type UserCreds struct {
 	Password string
 }
 
-func NewApp() *Application {
-	db, err := sql.Open("postgres", "postgres://chatapp:chatapp@localhost/chatapp?sslmode=disable")
+func NewApp(hashKey, blockKey string) *Application {
+	dbConn, err := sql.Open("postgres", "postgres://chatapp:chatapp@localhost/chatapp?sslmode=disable")
 	if err != nil {
-		log.Println("Unable to connect to database")
 		log.Fatal(err)
 	}
+	// Execute a dummy query to test the connection.
+	_, err = dbConn.Exec("SELECT current_user")
+	if err != nil {
+		log.Fatal("Unable to connect to database: ", err)
+	}
+
 	return &Application{
-		dbConn:    db,
-		chatUsers: []*ChatUser{},
+		chatUsers:       []*ChatUser{},
+		dbConn:          dbConn,
+		secureCookie:    securecookie.New([]byte(hashKey), []byte(blockKey)),
+		staticFilesPath: filepath.Join(".", staticDir),
 		upgrader: &websocket.Upgrader{
 			ReadBufferSize:  1024,
 			WriteBufferSize: 1024,
 		},
-		staticFilesPath: filepath.Join(".", staticDir),
 	}
 }
 
@@ -65,17 +77,22 @@ func (a *Application) SetupRouter() *mux.Router {
 
 func (a *Application) serveHomePage(w http.ResponseWriter, r *http.Request) {
 	log.Println("GET /")
-	a.serveHtmlPage(w, r, "index")
+	if a.isUserAuthenticated(r) {
+		a.serveHtmlPage(w, r, "index")
+	} else {
+		// Redirect unauthorized users
+		a.serveHtmlPage(w, r, "login")
+	}
 }
 
 func (a *Application) handleLogin(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "GET":
+		// Page request
 		a.serveLoginPage(w, r)
 	case "POST":
+		// Login request
 		a.loginUser(w, r)
-	default:
-		w.WriteHeader(http.StatusMethodNotAllowed)
 	}
 }
 
@@ -92,33 +109,38 @@ func (a *Application) loginUser(w http.ResponseWriter, r *http.Request) {
 	log.Println("POST /login")
 	requestCreds, err := readUserCreds(r)
 	if err != nil {
-		log.Println(err)
+		log.Println("readUserCreds: ", err)
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
 	storedCreds, err := a.findUserByName(requestCreds.UserName)
 	if err != nil {
-		log.Println(err)
+		log.Println("Application.findUserByName: ", err)
 		if pqErr, ok := err.(*pq.Error); ok {
 			log.Println(pqErr.Code.Name())
 		}
 		if err == sql.ErrNoRows {
-			w.WriteHeader(http.StatusBadRequest)
+			http.Error(w, "No user found with that name", http.StatusBadRequest)
 			return
 		}
-		w.WriteHeader(http.StatusInternalServerError)
+		http.Error(w, "Sorry, something went wrong. Please try again later", http.StatusInternalServerError)
 		return
 	}
 
 	hashedPassword := storedCreds.Password
 	if err := bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(requestCreds.Password)); err != nil {
-		log.Println(err)
-		w.WriteHeader(http.StatusBadRequest)
+		log.Println("bcrypt.CompareHashAndPassword: ", err)
+		http.Error(w, "Invalid password", http.StatusBadRequest)
 		return
 	}
 
-	http.Redirect(w, r, "/", http.StatusMovedPermanently)
+	if err := a.createUserSession(w, r, requestCreds.UserName); err != nil {
+		log.Println("Application.createUserSession: ", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
 }
 
 func (a *Application) findUserByName(userName string) (*UserCreds, error) {
@@ -137,26 +159,29 @@ func (a *Application) handleRegistration(w http.ResponseWriter, r *http.Request)
 	log.Println("POST /register")
 	userCreds, err := readUserCreds(r)
 	if err != nil {
-		log.Println(err)
+		log.Println("readUserCreds: ", err)
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 	if err := a.registerUser(userCreds); err != nil {
-		log.Println(err)
+		log.Println("Application.registerUser: ", err)
 		if pqErr, ok := err.(*pq.Error); ok {
 			log.Println(pqErr.Code.Name())
 			if pqErr.Code.Name() == "unique_violation" {
-				w.WriteHeader(http.StatusBadRequest)
+				http.Error(w, "A user with that name already exists", http.StatusBadRequest)
 				return
 			}
 		}
-		w.WriteHeader(http.StatusInternalServerError)
+		http.Error(w, "Sorry, something went wrong. Please try again later", http.StatusInternalServerError)
 		return
 	}
 
-	// Redirect to index page on success
-	//createUserSession(w)
-	http.Redirect(w, r, "/", http.StatusMovedPermanently)
+	if err := a.createUserSession(w, r, userCreds.UserName); err != nil {
+		log.Println("Application.createUserSession: ", err)
+		http.Error(w, "Sorry, something went wrong. Please try again later", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
 }
 
 func readUserCreds(r *http.Request) (*UserCreds, error) {
@@ -171,6 +196,38 @@ func readUserCreds(r *http.Request) (*UserCreds, error) {
 		return nil, err
 	}
 	return u, nil
+}
+
+func (a *Application) createUserSession(w http.ResponseWriter, r *http.Request, userName string) error {
+	log.Println("createUserSession")
+	encoded, err := a.secureCookie.Encode("authenticated", true)
+	if err != nil {
+		log.Println("Unable to set cookie")
+		return err
+	}
+	cookie := &http.Cookie{
+		Name:     "authenticated",
+		Value:    encoded,
+		Path:     "/",
+		Secure:   true,
+		HttpOnly: true,
+		MaxAge:   cookieMaxAge,
+	}
+	http.SetCookie(w, cookie)
+	return nil
+}
+
+func (a *Application) isUserAuthenticated(r *http.Request) bool {
+	log.Println("isUserAuthenticated")
+	if cookie, err := r.Cookie("authenticated"); err == nil {
+		var authenticated bool
+		if err = a.secureCookie.Decode("authenticated", cookie.Value, &authenticated); err != nil {
+			log.Println(err)
+		}
+		return authenticated
+	}
+	log.Println("Cookie not set")
+	return false
 }
 
 func (a *Application) registerUser(l *UserCreds) error {
@@ -200,23 +257,22 @@ func (a *Application) acceptChatConnection(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	newUser := a.authenticateUser(conn)
+	newUser := authenticateUser(conn)
 	if newUser != nil {
 		a.chatUsers = append(a.chatUsers, newUser)
-		go a.createUserSession(newUser)
+		go a.handleChatSession(newUser)
 	}
 }
 
 // TODO: create a real chat protocol
-func (a *Application) authenticateUser(conn *websocket.Conn) *ChatUser {
+func authenticateUser(conn *websocket.Conn) *ChatUser {
 	log.Println("User connected from " + conn.RemoteAddr().String())
 	messageType, message, err := conn.ReadMessage()
 	if messageType != websocket.TextMessage {
 		err = errors.New("Required text message, got binary message instead")
 	}
 	if err != nil {
-		log.Println("Unable to authenticate user. Error:")
-		log.Println(err)
+		log.Println("authenticateUser: ", err)
 		return nil
 	}
 
@@ -229,12 +285,12 @@ func (a *Application) authenticateUser(conn *websocket.Conn) *ChatUser {
 	return chatUser
 }
 
-func (a *Application) createUserSession(chatUser *ChatUser) {
+func (a *Application) handleChatSession(chatUser *ChatUser) {
 	defer chatUser.userConn.Close()
 	for {
 		messageType, message, err := chatUser.userConn.ReadMessage()
 		if err != nil {
-			log.Println(err)
+			log.Println("chatUser.userConn.ReadMessage: ", err)
 			break
 		}
 

@@ -49,8 +49,24 @@ func runAppServer(wg *sync.WaitGroup, httpsPort string) {
 		log.Fatal("Need to set CHATAPP_TLS_PRIVATE_KEY and CHATAPP_TLS_CERTIFICATE to continue")
 	}
 
+	// Secret keys for cookies
+	hashKey := os.Getenv("CHATAPP_COOKIE_SECRET_HASH_KEY")
+	if hashKey == "" {
+		log.Fatal("Need to set CHATAPP_COOKIE_SECRET_HASH_KEY")
+	}
+	if len(hashKey) != 32 && len(hashKey) != 64 {
+		log.Println("Warning: CHATAPP_COOKIE_SECRET_HASH_KEY should be 32 or 64 bytes")
+	}
+	blockKey := os.Getenv("CHATAPP_COOKIE_SECRET_BLOCK_KEY")
+	if blockKey == "" {
+		log.Fatal("Need to set CHATAPP_COOKIE_SECRET_BLOCK_KEY")
+	}
+	if len(blockKey) != 16 && len(blockKey) != 24 && len(blockKey) != 32 {
+		log.Println("Warning: CHATAPP_COOKIE_SECRET_BLOCK_KEY should be 16, 24, 32 bytes")
+	}
+
 	// App setup
-	app := chat.NewApp()
+	app := chat.NewApp(hashKey, blockKey)
 	server := &http.Server{
 		Addr:         ":" + httpsPort,
 		ReadTimeout:  5 * time.Second,
