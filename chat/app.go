@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"path/filepath"
 
+	"github.com/eshyong/chatapp/chat/repository"
+	"github.com/eshyong/chatapp/chat/structs"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/securecookie"
 	"github.com/gorilla/websocket"
@@ -24,22 +26,12 @@ const (
 )
 
 type Application struct {
-	connectedUsers  []*ChatUser
-	dbConn          *sql.DB
+	connectedUsers  []*structs.ChatUser
 	router          *mux.Router
 	secureCookie    *securecookie.SecureCookie
 	staticFilesPath string
 	upgrader        *websocket.Upgrader
-}
-
-type ChatUser struct {
-	userName string
-	userConn *websocket.Conn
-}
-
-type UserCreds struct {
-	UserName string
-	Password string
+	userRepo        *repository.UserRepository
 }
 
 func NewApp(hashKey, blockKey string) *Application {
@@ -54,14 +46,14 @@ func NewApp(hashKey, blockKey string) *Application {
 	}
 
 	return &Application{
-		connectedUsers:  []*ChatUser{},
-		dbConn:          dbConn,
+		connectedUsers:  []*structs.ChatUser{},
 		secureCookie:    securecookie.New([]byte(hashKey), []byte(blockKey)),
 		staticFilesPath: filepath.Join(".", staticDir),
 		upgrader: &websocket.Upgrader{
 			ReadBufferSize:  1024,
 			WriteBufferSize: 1024,
 		},
+		userRepo: repository.NewUserRepository(dbConn),
 	}
 }
 
@@ -113,7 +105,7 @@ func (a *Application) loginUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	storedCreds, err := a.findUserByName(requestCreds.UserName)
+	storedCreds, err := a.userRepo.FindUserByName(requestCreds.UserName)
 	if err != nil {
 		log.Println("Application.findUserByName: ", err)
 		if pqErr, ok := err.(*pq.Error); ok {
@@ -140,18 +132,6 @@ func (a *Application) loginUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusOK)
-}
-
-func (a *Application) findUserByName(userName string) (*UserCreds, error) {
-	u := &UserCreds{}
-	err := a.dbConn.QueryRow(
-		"SELECT username, hashed_password FROM data.chat_users WHERE username = $1",
-		userName,
-	).Scan(&u.UserName, &u.Password)
-	if err != nil {
-		return nil, err
-	}
-	return u, nil
 }
 
 func (a *Application) registrationHandler(w http.ResponseWriter, r *http.Request) {
@@ -183,14 +163,14 @@ func (a *Application) registrationHandler(w http.ResponseWriter, r *http.Request
 	w.WriteHeader(http.StatusOK)
 }
 
-func readUserCreds(r *http.Request) (*UserCreds, error) {
+func readUserCreds(r *http.Request) (*structs.UserCreds, error) {
 	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		// Probably EOF errors, according to golang docs
 		return nil, err
 	}
 
-	u := &UserCreds{}
+	u := &structs.UserCreds{}
 	if err := json.Unmarshal(body, u); err != nil {
 		return nil, err
 	}
@@ -234,24 +214,13 @@ func (a *Application) isUserAuthenticated(r *http.Request) bool {
 	return false
 }
 
-func (a *Application) registerUser(l *UserCreds) error {
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(l.Password), bcrypt.DefaultCost)
+func (a *Application) registerUser(u *structs.UserCreds) error {
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(u.Password), bcrypt.DefaultCost)
 	if err != nil {
 		return errors.New("bcrypt hash failed")
 	}
 
-	result, err := a.dbConn.Exec(
-		"INSERT INTO data.chat_users (username, hashed_password) VALUES ($1, $2)",
-		l.UserName, string(hashedPassword))
-	if err != nil {
-		return err
-	}
-
-	rowsAffected, _ := result.RowsAffected()
-	if rowsAffected == 0 {
-		return errors.New("Unable to create new user")
-	}
-	return nil
+	return a.userRepo.InsertUser(u.UserName, string(hashedPassword))
 }
 
 func (a *Application) acceptChatConnection(w http.ResponseWriter, r *http.Request) {
@@ -269,7 +238,7 @@ func (a *Application) acceptChatConnection(w http.ResponseWriter, r *http.Reques
 }
 
 // TODO: create a real chat protocol
-func authenticateUser(conn *websocket.Conn) *ChatUser {
+func authenticateUser(conn *websocket.Conn) *structs.ChatUser {
 	log.Println("User connected from " + conn.RemoteAddr().String())
 	messageType, message, err := conn.ReadMessage()
 	if messageType != websocket.TextMessage {
@@ -281,18 +250,18 @@ func authenticateUser(conn *websocket.Conn) *ChatUser {
 	}
 
 	// Create a new user
-	chatUser := &ChatUser{
-		userName: string(message),
-		userConn: conn,
+	chatUser := &structs.ChatUser{
+		UserName: string(message),
+		UserConn: conn,
 	}
-	log.Println("Authenticated user: " + chatUser.userName)
+	log.Println("Authenticated user: " + chatUser.UserName)
 	return chatUser
 }
 
-func (a *Application) handleChatSession(chatUser *ChatUser) {
-	defer chatUser.userConn.Close()
+func (a *Application) handleChatSession(chatUser *structs.ChatUser) {
+	defer chatUser.UserConn.Close()
 	for {
-		messageType, message, err := chatUser.userConn.ReadMessage()
+		messageType, message, err := chatUser.UserConn.ReadMessage()
 		if err != nil {
 			log.Println("chatUser.userConn.ReadMessage: ", err)
 			break
@@ -300,11 +269,11 @@ func (a *Application) handleChatSession(chatUser *ChatUser) {
 
 		if messageType != websocket.TextMessage {
 			// Send an error to the user
-			chatUser.userConn.WriteMessage(websocket.TextMessage, []byte("Unable to handle binary messages"))
+			chatUser.UserConn.WriteMessage(websocket.TextMessage, []byte("Unable to handle binary messages"))
 			continue
 		}
 
-		a.broadcastMessage(chatUser.userName, message)
+		a.broadcastMessage(chatUser.UserName, message)
 	}
 }
 
@@ -312,10 +281,10 @@ func (a *Application) broadcastMessage(sender string, message []byte) {
 	log.Println("Sending message from: " + sender)
 	for _, user := range a.connectedUsers {
 		// Avoid broadcasting message to sender
-		if user.userName != sender {
-			log.Println("Sending message to: " + user.userName)
-			if err := user.userConn.WriteMessage(websocket.TextMessage, message); err != nil {
-				log.Println("Unable to send message to " + user.userName)
+		if user.UserName != sender {
+			log.Println("Sending message to: " + user.UserName)
+			if err := user.UserConn.WriteMessage(websocket.TextMessage, message); err != nil {
+				log.Println("Unable to send message to " + user.UserName)
 				continue
 			}
 		}
