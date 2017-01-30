@@ -24,7 +24,7 @@ const (
 )
 
 type Application struct {
-	chatUsers       []*ChatUser
+	connectedUsers  []*ChatUser
 	dbConn          *sql.DB
 	router          *mux.Router
 	secureCookie    *securecookie.SecureCookie
@@ -54,7 +54,7 @@ func NewApp(hashKey, blockKey string) *Application {
 	}
 
 	return &Application{
-		chatUsers:       []*ChatUser{},
+		connectedUsers:  []*ChatUser{},
 		dbConn:          dbConn,
 		secureCookie:    securecookie.New([]byte(hashKey), []byte(blockKey)),
 		staticFilesPath: filepath.Join(".", staticDir),
@@ -69,9 +69,8 @@ func (a *Application) SetupRouter() *mux.Router {
 	r := mux.NewRouter()
 	r.PathPrefix(staticDir).Handler(http.StripPrefix(staticDir, http.FileServer(http.Dir(a.staticFilesPath))))
 	r.HandleFunc("/", a.serveHomePage).Methods("GET")
-	r.HandleFunc("/login", a.handleLogin).Methods("GET", "POST")
-	r.HandleFunc("/register", a.handleRegistration).Methods("POST")
-	r.HandleFunc("/chat-room", a.acceptChatConnection).Methods("GET")
+	r.HandleFunc("/login", a.loginHandler).Methods("GET", "POST")
+	r.HandleFunc("/register", a.registrationHandler).Methods("POST")
 	return r
 }
 
@@ -85,7 +84,7 @@ func (a *Application) serveHomePage(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (a *Application) handleLogin(w http.ResponseWriter, r *http.Request) {
+func (a *Application) loginHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "GET":
 		// Page request
@@ -155,7 +154,7 @@ func (a *Application) findUserByName(userName string) (*UserCreds, error) {
 	return u, nil
 }
 
-func (a *Application) handleRegistration(w http.ResponseWriter, r *http.Request) {
+func (a *Application) registrationHandler(w http.ResponseWriter, r *http.Request) {
 	log.Println("POST /register")
 	userCreds, err := readUserCreds(r)
 	if err != nil {
@@ -200,13 +199,17 @@ func readUserCreds(r *http.Request) (*UserCreds, error) {
 
 func (a *Application) createUserSession(w http.ResponseWriter, r *http.Request, userName string) error {
 	log.Println("createUserSession")
-	encoded, err := a.secureCookie.Encode("authenticated", true)
+	session := map[string]string{
+		"user_name":     userName,
+		"authenticated": "true",
+	}
+	encoded, err := a.secureCookie.Encode("user_session", session)
 	if err != nil {
 		log.Println("Unable to set cookie")
 		return err
 	}
 	cookie := &http.Cookie{
-		Name:     "authenticated",
+		Name:     "user_session",
 		Value:    encoded,
 		Path:     "/",
 		Secure:   true,
@@ -219,12 +222,13 @@ func (a *Application) createUserSession(w http.ResponseWriter, r *http.Request, 
 
 func (a *Application) isUserAuthenticated(r *http.Request) bool {
 	log.Println("isUserAuthenticated")
-	if cookie, err := r.Cookie("authenticated"); err == nil {
-		var authenticated bool
-		if err = a.secureCookie.Decode("authenticated", cookie.Value, &authenticated); err != nil {
+	if cookie, err := r.Cookie("user_session"); err == nil {
+		var sessionValues map[string]string
+		if err = a.secureCookie.Decode("user_session", cookie.Value, &sessionValues); err != nil {
 			log.Println(err)
+			return false
 		}
-		return authenticated
+		return sessionValues["authenticated"] == "true"
 	}
 	log.Println("Cookie not set")
 	return false
@@ -244,8 +248,8 @@ func (a *Application) registerUser(l *UserCreds) error {
 	}
 
 	rowsAffected, _ := result.RowsAffected()
-	if rowsAffected != 1 {
-		return errors.New("Unable to create new user. Please try again")
+	if rowsAffected == 0 {
+		return errors.New("Unable to create new user")
 	}
 	return nil
 }
@@ -259,7 +263,7 @@ func (a *Application) acceptChatConnection(w http.ResponseWriter, r *http.Reques
 
 	newUser := authenticateUser(conn)
 	if newUser != nil {
-		a.chatUsers = append(a.chatUsers, newUser)
+		a.connectedUsers = append(a.connectedUsers, newUser)
 		go a.handleChatSession(newUser)
 	}
 }
@@ -306,7 +310,7 @@ func (a *Application) handleChatSession(chatUser *ChatUser) {
 
 func (a *Application) broadcastMessage(sender string, message []byte) {
 	log.Println("Sending message from: " + sender)
-	for _, user := range a.chatUsers {
+	for _, user := range a.connectedUsers {
 		// Avoid broadcasting message to sender
 		if user.userName != sender {
 			log.Println("Sending message to: " + user.userName)
