@@ -183,13 +183,14 @@ func (a *Application) createUserSession(w http.ResponseWriter, r *http.Request, 
 		"user_name":     userName,
 		"authenticated": "true",
 	}
-	encoded, err := a.secureCookie.Encode("user_session", session)
+	cookieName := "user_session"
+	encoded, err := a.secureCookie.Encode(cookieName, session)
 	if err != nil {
 		log.Println("Unable to set cookie")
 		return err
 	}
 	cookie := &http.Cookie{
-		Name:     "user_session",
+		Name:     cookieName,
 		Value:    encoded,
 		Path:     "/",
 		Secure:   true,
@@ -202,9 +203,10 @@ func (a *Application) createUserSession(w http.ResponseWriter, r *http.Request, 
 
 func (a *Application) isUserAuthenticated(r *http.Request) bool {
 	log.Println("isUserAuthenticated")
-	if cookie, err := r.Cookie("user_session"); err == nil {
+	cookieName := "user_session"
+	if cookie, err := r.Cookie(cookieName); err == nil {
 		var sessionValues map[string]string
-		if err = a.secureCookie.Decode("user_session", cookie.Value, &sessionValues); err != nil {
+		if err = a.secureCookie.Decode(cookieName, cookie.Value, &sessionValues); err != nil {
 			log.Println(err)
 			return false
 		}
