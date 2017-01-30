@@ -4,3 +4,5 @@ NOTE: this server requires a TLS certificate to run locally. This entails all wo
 certs. This may also involve editing your hosts file to make it run.
 
 TODO: Make server run locally without above TLS requirement.
+
+TODO: Start writing tests
