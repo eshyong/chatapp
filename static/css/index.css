@@ -1,16 +1,31 @@
-input.username-submit {
-    width: 50%;
+h2 {
+    margin: 0;
+}
+
+.app-container {
+    display: flex;
+    height: 100%;
+}
+
+.chatroom-list {
+    flex-grow: 1;
+    height: 100%;
 }
 
 .chat-container {
-    width: 50%;
-    height: 300px;
+    display: flex;
+    flex-direction: column;
+    flex-grow: 3;
+    height: 100%;
 }
 
 .chat-window {
-    height: 80%;
-    max-height: 80%;
+    flex: 1;
     overflow-y: scroll;
     overflow-x: hidden;
     word-wrap: break-word;
+}
+
+.chatbox {
+    height: 75px;
 }
