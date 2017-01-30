@@ -2,12 +2,12 @@
 
 $(document).ready(function () {
     const enterKey = 13;
-    var username = '';
-    var chatConn;
+    var username = '',
+        chatConn;
 
     $('.username-submit').on('keyup', function(event) {
-        var usernameBox = $(event.target);
-        var chatContainer = $('.chat-container');
+        var usernameBox = $(event.target),
+            chatContainer = $('.chat-container');
 
         if (event.keyCode !== enterKey) {
             return;
@@ -28,9 +28,9 @@ $(document).ready(function () {
 
         chatConn = new window.WebSocket('wss://' + window.location.host + '/chat-room');
         chatConn.onmessage = function(event) {
-            var chatMessages = $('.chat-messages');
-            var chatWindow = $('.chat-window');
-            var message = event.data;
+            var chatMessages = $('.chat-messages'),
+                chatWindow = $('.chat-window'),
+                message = event.data;
 
             console.log('Server said: ' + event.data);
             appendChatMessage(message);
@@ -42,11 +42,11 @@ $(document).ready(function () {
     }
 
     $('.chatbox').on('keyup', function(event) {
-        var chatMessages = $('.chat-messages');
-        var chatWindow = $('.chat-window');
-        var chatBox = $(event.target);
-        var contents = event.target.value.trim();
-        var message;
+        var chatMessages = $('.chat-messages'),
+            chatWindow = $('.chat-window'),
+            chatBox = $(event.target),
+            contents = event.target.value.trim(),
+            message;
 
         if (event.keyCode !== enterKey) {
             return;
