@@ -5,4 +5,4 @@ certs. This may also involve editing your hosts file to make it run.
 
 TODO: Make server run locally without above TLS requirement.
 
-TODO: Start writing tests
+TODO: Refactor and start writing tests
