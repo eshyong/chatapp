@@ -101,13 +101,13 @@ func (a *Application) loginUser(w http.ResponseWriter, r *http.Request) {
 	requestCreds, err := readUserCreds(r)
 	if err != nil {
 		log.Println("readUserCreds: ", err)
-		w.WriteHeader(http.StatusBadRequest)
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
 	storedCreds, err := a.userRepo.FindUserByName(requestCreds.UserName)
 	if err != nil {
-		log.Println("Application.findUserByName: ", err)
+		log.Println("UserRepository.FindUserByName: ", err)
 		if pqErr, ok := err.(*pq.Error); ok {
 			log.Println(pqErr.Code.Name())
 		}
@@ -139,7 +139,7 @@ func (a *Application) registrationHandler(w http.ResponseWriter, r *http.Request
 	userCreds, err := readUserCreds(r)
 	if err != nil {
 		log.Println("readUserCreds: ", err)
-		w.WriteHeader(http.StatusBadRequest)
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	if err := a.registerUser(userCreds); err != nil {
@@ -173,6 +173,9 @@ func readUserCreds(r *http.Request) (*structs.UserCreds, error) {
 	u := &structs.UserCreds{}
 	if err := json.Unmarshal(body, u); err != nil {
 		return nil, err
+	}
+	if u.UserName == "" || u.Password == "" {
+		return nil, errors.New("Unable to parse user request as JSON")
 	}
 	return u, nil
 }
