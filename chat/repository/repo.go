@@ -7,17 +7,17 @@ import (
 	"github.com/eshyong/chatapp/chat/models"
 )
 
-type UserRepository struct {
+type Repository struct {
 	dbConn *sql.DB
 }
 
-func NewUserRepository(dbConn *sql.DB) *UserRepository {
-	return &UserRepository{dbConn: dbConn}
+func NewUserRepository(dbConn *sql.DB) *Repository {
+	return &Repository{dbConn: dbConn}
 }
 
-func (ur *UserRepository) FindUserByName(name string) (*models.UserCreds, error) {
+func (r *Repository) FindUserByName(name string) (*models.UserCreds, error) {
 	u := &models.UserCreds{}
-	err := ur.dbConn.QueryRow(
+	err := r.dbConn.QueryRow(
 		"SELECT username, hashed_password FROM data.chat_users WHERE username = $1",
 		name,
 	).Scan(&u.UserName, &u.Password)
@@ -27,8 +27,8 @@ func (ur *UserRepository) FindUserByName(name string) (*models.UserCreds, error)
 	return u, nil
 }
 
-func (ur *UserRepository) InsertUser(userName, hashedPassword string) error {
-	result, err := ur.dbConn.Exec(
+func (r *Repository) InsertUser(userName, hashedPassword string) error {
+	result, err := r.dbConn.Exec(
 		"INSERT INTO data.chat_users (username, hashed_password) VALUES ($1, $2)",
 		userName, hashedPassword)
 	if err != nil {

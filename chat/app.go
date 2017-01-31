@@ -25,13 +25,18 @@ const (
 	cookieMaxAge = 900
 )
 
+type ChatSession struct {
+	UserName string
+	UserConn *websocket.Conn
+}
+
 type Application struct {
-	connectedUsers  []*models.ChatUser
+	connectedUsers  []*ChatSession
 	router          *mux.Router
 	secureCookie    *securecookie.SecureCookie
 	staticFilesPath string
 	upgrader        *websocket.Upgrader
-	userRepo        *repository.UserRepository
+	userRepo        *repository.Repository
 }
 
 func NewApp(hashKey, blockKey string) *Application {
@@ -46,7 +51,7 @@ func NewApp(hashKey, blockKey string) *Application {
 	}
 
 	return &Application{
-		connectedUsers:  []*models.ChatUser{},
+		connectedUsers:  []*ChatSession{},
 		secureCookie:    securecookie.New([]byte(hashKey), []byte(blockKey)),
 		staticFilesPath: filepath.Join(".", staticDir),
 		upgrader: &websocket.Upgrader{
@@ -100,7 +105,7 @@ func (a *Application) loginUser(w http.ResponseWriter, r *http.Request) {
 	log.Println("POST /login")
 	requestCreds, err := readUserCreds(r)
 	if err != nil {
-		log.Println("readUserCreds: ", err)
+		log.Println("readUserCreds:", err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -243,7 +248,7 @@ func (a *Application) acceptChatConnection(w http.ResponseWriter, r *http.Reques
 }
 
 // TODO: create a real chat protocol
-func authenticateUser(conn *websocket.Conn) *models.ChatUser {
+func authenticateUser(conn *websocket.Conn) *ChatSession {
 	log.Println("User connected from " + conn.RemoteAddr().String())
 	messageType, message, err := conn.ReadMessage()
 	if messageType != websocket.TextMessage {
@@ -255,18 +260,18 @@ func authenticateUser(conn *websocket.Conn) *models.ChatUser {
 	}
 
 	// Create a new user
-	chatUser := &models.ChatUser{
+	chatSession := &ChatSession{
 		UserName: string(message),
 		UserConn: conn,
 	}
-	log.Println("Authenticated user: " + chatUser.UserName)
-	return chatUser
+	log.Println("Authenticated user: " + chatSession.UserName)
+	return chatSession
 }
 
-func (a *Application) handleChatSession(chatUser *models.ChatUser) {
-	defer chatUser.UserConn.Close()
+func (a *Application) handleChatSession(chatSession *ChatSession) {
+	defer chatSession.UserConn.Close()
 	for {
-		messageType, message, err := chatUser.UserConn.ReadMessage()
+		messageType, message, err := chatSession.UserConn.ReadMessage()
 		if err != nil {
 			log.Println("chatUser.userConn.ReadMessage: ", err)
 			break
@@ -274,11 +279,11 @@ func (a *Application) handleChatSession(chatUser *models.ChatUser) {
 
 		if messageType != websocket.TextMessage {
 			// Send an error to the user
-			chatUser.UserConn.WriteMessage(websocket.TextMessage, []byte("Unable to handle binary messages"))
+			chatSession.UserConn.WriteMessage(websocket.TextMessage, []byte("Unable to handle binary messages"))
 			continue
 		}
 
-		a.broadcastMessage(chatUser.UserName, message)
+		a.broadcastMessage(chatSession.UserName, message)
 	}
 }
 
