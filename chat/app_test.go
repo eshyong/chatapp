@@ -19,7 +19,7 @@ func TestReadUserCreds(t *testing.T) {
 		UserName: "eric",
 		Password: "abc123",
 	}
-	actual, err := readUserCreds(req)
+	actual, err := readRegisterRequest(req)
 	assert.Nil(t, err)
 	assert.Equal(t, expected, actual)
 
@@ -27,7 +27,7 @@ func TestReadUserCreds(t *testing.T) {
 	req = &http.Request{
 		Body: ioutil.NopCloser(bytes.NewReader([]byte(body))),
 	}
-	u, err := readUserCreds(req)
+	u, err := readRegisterRequest(req)
 	assert.Nil(t, u)
 	assert.Error(t, err)
 }

@@ -104,7 +104,7 @@ func (a *Application) serveHtmlPage(w http.ResponseWriter, r *http.Request, name
 
 func (a *Application) loginUser(w http.ResponseWriter, r *http.Request) {
 	log.Println("POST /login")
-	requestCreds, err := readUserCreds(r)
+	requestCreds, err := readLoginUserRequest(r)
 	if err != nil {
 		log.Println("readUserCreds:", err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -142,13 +142,13 @@ func (a *Application) loginUser(w http.ResponseWriter, r *http.Request) {
 
 func (a *Application) registrationHandler(w http.ResponseWriter, r *http.Request) {
 	log.Println("POST /register")
-	userCreds, err := readUserCreds(r)
+	registerRequest, err := readRegisterRequest(r)
 	if err != nil {
 		log.Println("readUserCreds: ", err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	if err := a.registerUser(userCreds); err != nil {
+	if err := a.registerUser(registerRequest); err != nil {
 		log.Println("Application.registerUser: ", err)
 		if pqErr, ok := err.(*pq.Error); ok {
 			log.Println(pqErr.Code.Name())
@@ -161,7 +161,7 @@ func (a *Application) registrationHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	if err := a.createUserSession(w, r, userCreds.UserName); err != nil {
+	if err := a.createUserSession(w, r, registerRequest.UserName); err != nil {
 		log.Println("Application.createUserSession: ", err)
 		http.Error(w, "Sorry, something went wrong. Please try again later", http.StatusInternalServerError)
 		return
@@ -169,21 +169,38 @@ func (a *Application) registrationHandler(w http.ResponseWriter, r *http.Request
 	w.WriteHeader(http.StatusOK)
 }
 
-func readUserCreds(r *http.Request) (*models.ChatUser, error) {
+func readLoginUserRequest(r *http.Request) (*models.LoginRequest, error) {
 	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		// Probably EOF errors, according to golang docs
 		return nil, err
 	}
 
-	u := &models.ChatUser{}
-	if err := json.Unmarshal(body, u); err != nil {
+	loginRequest := &models.LoginRequest{}
+	if err := json.Unmarshal(body, loginRequest); err != nil {
 		return nil, err
 	}
-	if u.UserName == "" || u.Password == "" {
-		return nil, errors.New("Unable to parse user request as JSON")
+	if loginRequest.UserName == "" || loginRequest.Password == "" {
+		return nil, errors.New("Unable to parse login request as JSON")
 	}
-	return u, nil
+	return loginRequest, nil
+}
+
+func readRegisterRequest(r *http.Request) (*models.RegisterRequest, error) {
+	body, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		// Probably EOF errors, according to golang docs
+		return nil, err
+	}
+
+	registerRequest := &models.RegisterRequest{}
+	if err := json.Unmarshal(body, registerRequest); err != nil {
+		return nil, err
+	}
+	if registerRequest.UserName == "" || registerRequest.Password == "" {
+		return nil, errors.New("Unable to parse register request as JSON")
+	}
+	return registerRequest, nil
 }
 
 func (a *Application) createUserSession(w http.ResponseWriter, r *http.Request, userName string) error {
@@ -225,13 +242,13 @@ func (a *Application) isUserAuthenticated(r *http.Request) bool {
 	return false
 }
 
-func (a *Application) registerUser(u *models.ChatUser) error {
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(u.Password), bcrypt.DefaultCost)
+func (a *Application) registerUser(r *models.RegisterRequest) error {
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(r.Password), bcrypt.DefaultCost)
 	if err != nil {
 		return errors.New("bcrypt hash failed")
 	}
 
-	return a.repository.InsertUser(u.UserName, string(hashedPassword))
+	return a.repository.InsertUser(r.UserName, string(hashedPassword))
 }
 
 func (a *Application) chatRoomHandler(w http.ResponseWriter, r *http.Request) {

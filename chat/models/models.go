@@ -1,5 +1,12 @@
 package models
 
+type LoginRequest struct {
+	UserName string
+	Password string
+}
+
+type RegisterRequest LoginRequest
+
 type ChatUser struct {
 	Id       int
 	UserName string
