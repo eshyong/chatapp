@@ -2,15 +2,14 @@ package chat
 
 import (
 	"database/sql"
-	"encoding/json"
 	"errors"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"path/filepath"
 
 	"github.com/eshyong/chatapp/chat/models"
 	"github.com/eshyong/chatapp/chat/repository"
+	"github.com/eshyong/chatapp/chat/utils"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/securecookie"
 	"github.com/gorilla/websocket"
@@ -104,14 +103,18 @@ func (a *Application) serveHtmlPage(w http.ResponseWriter, r *http.Request, name
 
 func (a *Application) loginUser(w http.ResponseWriter, r *http.Request) {
 	log.Println("POST /login")
-	requestCreds, err := readLoginUserRequest(r)
-	if err != nil {
-		log.Println("readUserCreds:", err)
+	var loginRequest models.LoginRequest
+	if err := utils.UnmarshalJsonRequest(r, &loginRequest); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	storedCreds, err := a.repository.FindUserByName(requestCreds.UserName)
+	if loginRequest.UserName == "" || loginRequest.Password == "" {
+		http.Error(w, `"username" and "password" fields cannot be empty`, http.StatusBadRequest)
+		return
+	}
+
+	user, err := a.repository.FindUserByName(loginRequest.UserName)
 	if err != nil {
 		log.Println("UserRepository.FindUserByName: ", err)
 		if pqErr, ok := err.(*pq.Error); ok {
@@ -125,14 +128,14 @@ func (a *Application) loginUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	hashedPassword := storedCreds.Password
-	if err := bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(requestCreds.Password)); err != nil {
+	hashedPassword := user.Password
+	if err := bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(loginRequest.Password)); err != nil {
 		log.Println("bcrypt.CompareHashAndPassword: ", err)
 		http.Error(w, "Invalid password", http.StatusBadRequest)
 		return
 	}
 
-	if err := a.createUserSession(w, r, requestCreds.UserName); err != nil {
+	if err := a.createUserSession(w, r, loginRequest.UserName); err != nil {
 		log.Println("Application.createUserSession: ", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
@@ -142,12 +145,17 @@ func (a *Application) loginUser(w http.ResponseWriter, r *http.Request) {
 
 func (a *Application) registrationHandler(w http.ResponseWriter, r *http.Request) {
 	log.Println("POST /register")
-	registerRequest, err := readRegisterRequest(r)
-	if err != nil {
-		log.Println("readUserCreds: ", err)
+	registerRequest := &models.RegisterRequest{}
+	if err := utils.UnmarshalJsonRequest(r, registerRequest); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+
+	if registerRequest.UserName == "" || registerRequest.Password == "" {
+		http.Error(w, `"username" and "password" fields cannot be empty`, http.StatusBadRequest)
+		return
+	}
+
 	if err := a.registerUser(registerRequest); err != nil {
 		log.Println("Application.registerUser: ", err)
 		if pqErr, ok := err.(*pq.Error); ok {
@@ -167,40 +175,6 @@ func (a *Application) registrationHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 	w.WriteHeader(http.StatusOK)
-}
-
-func readLoginUserRequest(r *http.Request) (*models.LoginRequest, error) {
-	body, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		// Probably EOF errors, according to golang docs
-		return nil, err
-	}
-
-	loginRequest := &models.LoginRequest{}
-	if err := json.Unmarshal(body, loginRequest); err != nil {
-		return nil, err
-	}
-	if loginRequest.UserName == "" || loginRequest.Password == "" {
-		return nil, errors.New("Unable to parse login request as JSON")
-	}
-	return loginRequest, nil
-}
-
-func readRegisterRequest(r *http.Request) (*models.RegisterRequest, error) {
-	body, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		// Probably EOF errors, according to golang docs
-		return nil, err
-	}
-
-	registerRequest := &models.RegisterRequest{}
-	if err := json.Unmarshal(body, registerRequest); err != nil {
-		return nil, err
-	}
-	if registerRequest.UserName == "" || registerRequest.Password == "" {
-		return nil, errors.New("Unable to parse register request as JSON")
-	}
-	return registerRequest, nil
 }
 
 func (a *Application) createUserSession(w http.ResponseWriter, r *http.Request, userName string) error {
@@ -252,35 +226,23 @@ func (a *Application) registerUser(r *models.RegisterRequest) error {
 }
 
 func (a *Application) chatRoomHandler(w http.ResponseWriter, r *http.Request) {
-	createRequest, err := readCreateChatRoomRequest(r)
-	if err != nil {
+	var createRequest models.CreateChatRoomRequest
+	if err := utils.UnmarshalJsonRequest(r, &createRequest); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	err = a.repository.CreateChatRoom(createRequest.Name, createRequest.CreatedBy)
+
+	if createRequest.Name == "" || createRequest.CreatedBy == "" {
+		http.Error(w, `"name" and "createdBy" fields cannot be empty`, http.StatusBadRequest)
+		return
+	}
+
+	err := a.repository.CreateChatRoom(createRequest.Name, createRequest.CreatedBy)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	w.WriteHeader(200)
-}
-
-func readCreateChatRoomRequest(r *http.Request) (*models.CreateChatRoomRequest, error) {
-	body, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	createRequest := &models.CreateChatRoomRequest{}
-	err = json.Unmarshal(body, createRequest)
-	if err != nil {
-		return nil, err
-	}
-
-	if createRequest.Name == "" || createRequest.CreatedBy == "" {
-		return nil, errors.New("Unable to read create chat room request")
-	}
-	return createRequest, nil
 }
 
 func (a *Application) acceptChatConnection(w http.ResponseWriter, r *http.Request) {
