@@ -15,7 +15,7 @@ func TestReadUserCreds(t *testing.T) {
 	req := &http.Request{
 		Body: ioutil.NopCloser(bytes.NewReader([]byte(body))),
 	}
-	expected := &models.UserCreds{
+	expected := &models.ChatUser{
 		UserName: "eric",
 		Password: "abc123",
 	}

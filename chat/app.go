@@ -32,11 +32,11 @@ type ChatSession struct {
 
 type Application struct {
 	connectedUsers  []*ChatSession
+	repository      *repository.Repository
 	router          *mux.Router
 	secureCookie    *securecookie.SecureCookie
 	staticFilesPath string
 	upgrader        *websocket.Upgrader
-	userRepo        *repository.Repository
 }
 
 func NewApp(hashKey, blockKey string) *Application {
@@ -58,7 +58,7 @@ func NewApp(hashKey, blockKey string) *Application {
 			ReadBufferSize:  1024,
 			WriteBufferSize: 1024,
 		},
-		userRepo: repository.NewUserRepository(dbConn),
+		repository: repository.NewUserRepository(dbConn),
 	}
 }
 
@@ -68,6 +68,7 @@ func (a *Application) SetupRouter() *mux.Router {
 	r.HandleFunc("/", a.serveHomePage).Methods("GET")
 	r.HandleFunc("/login", a.loginHandler).Methods("GET", "POST")
 	r.HandleFunc("/register", a.registrationHandler).Methods("POST")
+	r.HandleFunc("/chatroom", a.chatRoomHandler).Methods("POST")
 	return r
 }
 
@@ -110,7 +111,7 @@ func (a *Application) loginUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	storedCreds, err := a.userRepo.FindUserByName(requestCreds.UserName)
+	storedCreds, err := a.repository.FindUserByName(requestCreds.UserName)
 	if err != nil {
 		log.Println("UserRepository.FindUserByName: ", err)
 		if pqErr, ok := err.(*pq.Error); ok {
@@ -168,14 +169,14 @@ func (a *Application) registrationHandler(w http.ResponseWriter, r *http.Request
 	w.WriteHeader(http.StatusOK)
 }
 
-func readUserCreds(r *http.Request) (*models.UserCreds, error) {
+func readUserCreds(r *http.Request) (*models.ChatUser, error) {
 	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		// Probably EOF errors, according to golang docs
 		return nil, err
 	}
 
-	u := &models.UserCreds{}
+	u := &models.ChatUser{}
 	if err := json.Unmarshal(body, u); err != nil {
 		return nil, err
 	}
@@ -224,13 +225,45 @@ func (a *Application) isUserAuthenticated(r *http.Request) bool {
 	return false
 }
 
-func (a *Application) registerUser(u *models.UserCreds) error {
+func (a *Application) registerUser(u *models.ChatUser) error {
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(u.Password), bcrypt.DefaultCost)
 	if err != nil {
 		return errors.New("bcrypt hash failed")
 	}
 
-	return a.userRepo.InsertUser(u.UserName, string(hashedPassword))
+	return a.repository.InsertUser(u.UserName, string(hashedPassword))
+}
+
+func (a *Application) chatRoomHandler(w http.ResponseWriter, r *http.Request) {
+	createRequest, err := readCreateChatRoomRequest(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	err = a.repository.CreateChatRoom(createRequest.Name, createRequest.CreatedBy)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(200)
+}
+
+func readCreateChatRoomRequest(r *http.Request) (*models.CreateChatRoomRequest, error) {
+	body, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	createRequest := &models.CreateChatRoomRequest{}
+	err = json.Unmarshal(body, createRequest)
+	if err != nil {
+		return nil, err
+	}
+
+	if createRequest.Name == "" || createRequest.CreatedBy == "" {
+		return nil, errors.New("Unable to read create chat room request")
+	}
+	return createRequest, nil
 }
 
 func (a *Application) acceptChatConnection(w http.ResponseWriter, r *http.Request) {
