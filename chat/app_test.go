@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/eshyong/chatapp/chat/structs"
+	"github.com/eshyong/chatapp/chat/models"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -15,7 +15,7 @@ func TestReadUserCreds(t *testing.T) {
 	req := &http.Request{
 		Body: ioutil.NopCloser(bytes.NewReader([]byte(body))),
 	}
-	expected := &structs.UserCreds{
+	expected := &models.UserCreds{
 		UserName: "eric",
 		Password: "abc123",
 	}

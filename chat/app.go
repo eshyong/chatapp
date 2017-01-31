@@ -9,8 +9,8 @@ import (
 	"net/http"
 	"path/filepath"
 
+	"github.com/eshyong/chatapp/chat/models"
 	"github.com/eshyong/chatapp/chat/repository"
-	"github.com/eshyong/chatapp/chat/structs"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/securecookie"
 	"github.com/gorilla/websocket"
@@ -26,7 +26,7 @@ const (
 )
 
 type Application struct {
-	connectedUsers  []*structs.ChatUser
+	connectedUsers  []*models.ChatUser
 	router          *mux.Router
 	secureCookie    *securecookie.SecureCookie
 	staticFilesPath string
@@ -46,7 +46,7 @@ func NewApp(hashKey, blockKey string) *Application {
 	}
 
 	return &Application{
-		connectedUsers:  []*structs.ChatUser{},
+		connectedUsers:  []*models.ChatUser{},
 		secureCookie:    securecookie.New([]byte(hashKey), []byte(blockKey)),
 		staticFilesPath: filepath.Join(".", staticDir),
 		upgrader: &websocket.Upgrader{
@@ -163,14 +163,14 @@ func (a *Application) registrationHandler(w http.ResponseWriter, r *http.Request
 	w.WriteHeader(http.StatusOK)
 }
 
-func readUserCreds(r *http.Request) (*structs.UserCreds, error) {
+func readUserCreds(r *http.Request) (*models.UserCreds, error) {
 	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		// Probably EOF errors, according to golang docs
 		return nil, err
 	}
 
-	u := &structs.UserCreds{}
+	u := &models.UserCreds{}
 	if err := json.Unmarshal(body, u); err != nil {
 		return nil, err
 	}
@@ -219,7 +219,7 @@ func (a *Application) isUserAuthenticated(r *http.Request) bool {
 	return false
 }
 
-func (a *Application) registerUser(u *structs.UserCreds) error {
+func (a *Application) registerUser(u *models.UserCreds) error {
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(u.Password), bcrypt.DefaultCost)
 	if err != nil {
 		return errors.New("bcrypt hash failed")
@@ -243,7 +243,7 @@ func (a *Application) acceptChatConnection(w http.ResponseWriter, r *http.Reques
 }
 
 // TODO: create a real chat protocol
-func authenticateUser(conn *websocket.Conn) *structs.ChatUser {
+func authenticateUser(conn *websocket.Conn) *models.ChatUser {
 	log.Println("User connected from " + conn.RemoteAddr().String())
 	messageType, message, err := conn.ReadMessage()
 	if messageType != websocket.TextMessage {
@@ -255,7 +255,7 @@ func authenticateUser(conn *websocket.Conn) *structs.ChatUser {
 	}
 
 	// Create a new user
-	chatUser := &structs.ChatUser{
+	chatUser := &models.ChatUser{
 		UserName: string(message),
 		UserConn: conn,
 	}
@@ -263,7 +263,7 @@ func authenticateUser(conn *websocket.Conn) *structs.ChatUser {
 	return chatUser
 }
 
-func (a *Application) handleChatSession(chatUser *structs.ChatUser) {
+func (a *Application) handleChatSession(chatUser *models.ChatUser) {
 	defer chatUser.UserConn.Close()
 	for {
 		messageType, message, err := chatUser.UserConn.ReadMessage()

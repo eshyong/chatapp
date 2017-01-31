@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"errors"
 
-	"github.com/eshyong/chatapp/chat/structs"
+	"github.com/eshyong/chatapp/chat/models"
 )
 
 type UserRepository struct {
@@ -15,8 +15,8 @@ func NewUserRepository(dbConn *sql.DB) *UserRepository {
 	return &UserRepository{dbConn: dbConn}
 }
 
-func (ur *UserRepository) FindUserByName(name string) (*structs.UserCreds, error) {
-	u := &structs.UserCreds{}
+func (ur *UserRepository) FindUserByName(name string) (*models.UserCreds, error) {
+	u := &models.UserCreds{}
 	err := ur.dbConn.QueryRow(
 		"SELECT username, hashed_password FROM data.chat_users WHERE username = $1",
 		name,
