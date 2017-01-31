@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS chat_users (
 CREATE TABLE IF NOT EXISTS chat_rooms (
     id serial PRIMARY KEY,
     name varchar(1024),
-    created_by integer REFERENCES chat_users
+    created_by integer REFERENCES chat_users,
     UNIQUE (name, created_by)
 );
 
