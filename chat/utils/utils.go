@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"io/ioutil"
 	"net/http"
+	"github.com/lib/pq"
+	"log"
 )
 
 func UnmarshalJsonRequest(r *http.Request, model interface{}) error {
@@ -17,4 +19,11 @@ func UnmarshalJsonRequest(r *http.Request, model interface{}) error {
 		return err
 	}
 	return nil
+}
+
+func HandlePqError(w http.ResponseWriter, pqErr *pq.Error, message string) {
+	log.Println(pqErr.Code.Name())
+	if pqErr.Code.Name() == "unique_violation" {
+		http.Error(w, message, http.StatusBadRequest)
+	}
 }

@@ -68,6 +68,7 @@ func (a *Application) SetupRouter() *mux.Router {
 	r.HandleFunc("/login", a.loginHandler).Methods("GET", "POST")
 	r.HandleFunc("/register", a.registrationHandler).Methods("POST")
 	r.HandleFunc("/chatroom", a.chatRoomHandler).Methods("POST")
+	r.HandleFunc("/chatroom/{name}", a.chatRoomHandler).Methods("DELETE")
 	return r
 }
 
@@ -117,9 +118,6 @@ func (a *Application) loginUser(w http.ResponseWriter, r *http.Request) {
 	user, err := a.repository.FindUserByName(loginRequest.UserName)
 	if err != nil {
 		log.Println("UserRepository.FindUserByName: ", err)
-		if pqErr, ok := err.(*pq.Error); ok {
-			log.Println(pqErr.Code.Name())
-		}
 		if err == sql.ErrNoRows {
 			http.Error(w, "No user found with that name", http.StatusBadRequest)
 			return
@@ -159,11 +157,8 @@ func (a *Application) registrationHandler(w http.ResponseWriter, r *http.Request
 	if err := a.registerUser(registerRequest); err != nil {
 		log.Println("Application.registerUser: ", err)
 		if pqErr, ok := err.(*pq.Error); ok {
-			log.Println(pqErr.Code.Name())
-			if pqErr.Code.Name() == "unique_violation" {
-				http.Error(w, "A user with that name already exists", http.StatusBadRequest)
-				return
-			}
+			utils.HandlePqError(w, pqErr, "A user with that name already exists")
+			return
 		}
 		http.Error(w, "Sorry, something went wrong. Please try again later", http.StatusInternalServerError)
 		return
@@ -226,6 +221,15 @@ func (a *Application) registerUser(r *models.RegisterRequest) error {
 }
 
 func (a *Application) chatRoomHandler(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case "POST":
+		a.createChatRoom(w, r)
+	case "DELETE":
+		a.deleteChatRoom(w, r)
+	}
+}
+
+func (a *Application) createChatRoom(w http.ResponseWriter, r *http.Request) {
 	var createRequest models.CreateChatRoomRequest
 	if err := utils.UnmarshalJsonRequest(r, &createRequest); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -239,8 +243,21 @@ func (a *Application) chatRoomHandler(w http.ResponseWriter, r *http.Request) {
 
 	err := a.repository.CreateChatRoom(createRequest.Name, createRequest.CreatedBy)
 	if err != nil {
+		if pqErr, ok := err.(*pq.Error); ok {
+			message := "A chat room with that name has already been created by " + createRequest.CreatedBy
+			utils.HandlePqError(w, pqErr, message)
+			return
+		}
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
+	}
+	w.WriteHeader(200)
+}
+
+func (a *Application) deleteChatRoom(w http.ResponseWriter, r *http.Request) {
+	roomName := mux.Vars(r)["name"]
+	if err := a.repository.DeleteChatRoom(roomName); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 	w.WriteHeader(200)
 }

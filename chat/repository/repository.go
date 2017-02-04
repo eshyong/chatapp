@@ -45,6 +45,9 @@ func (r *Repository) InsertUser(userName, hashedPassword string) error {
 func (r *Repository) CreateChatRoom(roomName, createdBy string) error {
 	user, err := r.FindUserByName(createdBy)
 	if err != nil {
+		if err == sql.ErrNoRows {
+			return errors.New("User with that name does not exist")
+		}
 		return err
 	}
 
@@ -59,6 +62,15 @@ func (r *Repository) CreateChatRoom(roomName, createdBy string) error {
 	rowsAffected, _ := result.RowsAffected()
 	if rowsAffected == 0 {
 		return errors.New("Unable to create new chatroom")
+	}
+	return nil
+}
+
+
+func (r *Repository) DeleteChatRoom(roomName string) error {
+	_, err := r.dbConn.Exec("DELETE FROM data.chat_rooms WHERE name=$1", roomName)
+	if err != nil {
+		return err
 	}
 	return nil
 }
