@@ -5,7 +5,7 @@ set -ex
 # This script assumes we're using Homebrew's postgresql.
 # Create the data directory
 if [ ! -d data ]; then
-    /usr/local/Cellar/postgresql/9.6.1/bin/initdb -D
+    /usr/local/Cellar/postgresql/9.6.1/bin/initdb --pgdata=$(pwd)/data
 fi
 
 # Parse command line arguments
