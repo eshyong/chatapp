@@ -68,14 +68,14 @@ func (a *Application) SetupRouter() *mux.Router {
 	// Serve static files
 	r.PathPrefix(staticDir).Handler(http.StripPrefix(staticDir, http.FileServer(http.Dir(a.staticFilesPath))))
 	// Main pages
-	r.Handle("/", a.checkAuthentication(http.HandlerFunc(a.serveHomePage))).Methods("GET")
-	r.Handle("/login", http.HandlerFunc(a.loginHandler)).Methods("GET", "POST")
-	r.Handle("/register", a.checkAuthentication(http.HandlerFunc(a.registrationHandler))).Methods("POST")
+	r.Handle("/", a.checkAuthentication(a.indexHandler())).Methods("GET")
+	r.Handle("/login", a.loginHandler()).Methods("GET", "POST")
+	r.Handle("/register", a.checkAuthentication(a.registrationHandler())).Methods("POST")
 	// API router
 	api := r.PathPrefix("/api").Subrouter()
-	api.Handle("/chatroom", a.checkAuthentication(http.HandlerFunc(a.chatRoomHandler))).Methods("POST")
-	api.Handle("/chatroom/{name}", a.checkAuthentication(http.HandlerFunc(a.chatRoomHandler))).Methods("DELETE")
-	api.Handle("/chatroom/list", a.checkAuthentication(http.HandlerFunc(a.listChatRooms))).Methods("GET")
+	api.Handle("/chatroom", a.checkAuthentication(a.chatRoomHandler())).Methods("POST")
+	api.Handle("/chatroom/{name}", a.checkAuthentication(a.chatRoomHandler())).Methods("DELETE")
+	api.Handle("/chatroom/list", a.checkAuthentication(a.listChatRoomsHandler())).Methods("GET")
 	return r
 }
 
@@ -91,20 +91,86 @@ func (a *Application) checkAuthentication(next http.Handler) http.Handler {
 	})
 }
 
-func (a *Application) serveHomePage(w http.ResponseWriter, r *http.Request) {
-	log.Println("GET /")
-	a.serveHtmlPage(w, r, "login")
+func (a *Application) indexHandler() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		log.Println("GET /")
+		a.serveHtmlPage(w, r, "login")
+	})
 }
 
-func (a *Application) loginHandler(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case "GET":
-		// Page request
-		a.serveLoginPage(w, r)
-	case "POST":
-		// Login request
-		a.loginUser(w, r)
-	}
+func (a *Application) loginHandler() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case "GET":
+			// Page request
+			a.serveLoginPage(w, r)
+		case "POST":
+			// Login request
+			a.loginUser(w, r)
+		}
+	})
+}
+
+func (a *Application) registrationHandler() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		log.Println("POST /register")
+		registerRequest := &models.RegisterRequest{}
+		if err := utils.UnmarshalJsonRequest(r, registerRequest); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		if registerRequest.UserName == "" || registerRequest.Password == "" {
+			http.Error(w, `"username" and "password" fields cannot be empty`, http.StatusBadRequest)
+			return
+		}
+
+		if err := a.registerUser(registerRequest); err != nil {
+			log.Println("Application.registerUser: ", err)
+			if pqErr, ok := err.(*pq.Error); ok {
+				utils.HandlePqError(w, pqErr, "A user with that name already exists")
+				return
+			}
+			http.Error(w, "Sorry, something went wrong. Please try again later", http.StatusInternalServerError)
+			return
+		}
+
+		if err := a.createUserSession(w, r, registerRequest.UserName); err != nil {
+			log.Println("Application.createUserSession: ", err)
+			http.Error(w, "Sorry, something went wrong. Please try again later", http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	})
+}
+
+func (a *Application) chatRoomHandler() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case "POST":
+			a.createChatRoom(w, r)
+		case "DELETE":
+			a.deleteChatRoom(w, r)
+		}
+	})
+}
+
+func (a *Application) listChatRoomsHandler() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		chatRoomList, err := a.repository.ListChatRooms()
+		if err != nil {
+			log.Println(err)
+			http.Error(w, "Sorry, try again later", http.StatusInternalServerError)
+			return
+		}
+		responseBody, err := json.Marshal(chatRoomList)
+		if err != nil {
+			http.Error(w, "Unable to send JSON response", http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		w.Write(responseBody)
+	})
 }
 
 func (a *Application) serveLoginPage(w http.ResponseWriter, r *http.Request) {
@@ -150,37 +216,6 @@ func (a *Application) loginUser(w http.ResponseWriter, r *http.Request) {
 	if err := a.createUserSession(w, r, loginRequest.UserName); err != nil {
 		log.Println("Application.createUserSession: ", err)
 		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-	w.WriteHeader(http.StatusOK)
-}
-
-func (a *Application) registrationHandler(w http.ResponseWriter, r *http.Request) {
-	log.Println("POST /register")
-	registerRequest := &models.RegisterRequest{}
-	if err := utils.UnmarshalJsonRequest(r, registerRequest); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	if registerRequest.UserName == "" || registerRequest.Password == "" {
-		http.Error(w, `"username" and "password" fields cannot be empty`, http.StatusBadRequest)
-		return
-	}
-
-	if err := a.registerUser(registerRequest); err != nil {
-		log.Println("Application.registerUser: ", err)
-		if pqErr, ok := err.(*pq.Error); ok {
-			utils.HandlePqError(w, pqErr, "A user with that name already exists")
-			return
-		}
-		http.Error(w, "Sorry, something went wrong. Please try again later", http.StatusInternalServerError)
-		return
-	}
-
-	if err := a.createUserSession(w, r, registerRequest.UserName); err != nil {
-		log.Println("Application.createUserSession: ", err)
-		http.Error(w, "Sorry, something went wrong. Please try again later", http.StatusInternalServerError)
 		return
 	}
 	w.WriteHeader(http.StatusOK)
@@ -232,15 +267,6 @@ func (a *Application) registerUser(r *models.RegisterRequest) error {
 	return a.repository.InsertUser(r.UserName, string(hashedPassword))
 }
 
-func (a *Application) chatRoomHandler(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case "POST":
-		a.createChatRoom(w, r)
-	case "DELETE":
-		a.deleteChatRoom(w, r)
-	}
-}
-
 func (a *Application) createChatRoom(w http.ResponseWriter, r *http.Request) {
 	var createRequest models.CreateChatRoomRequest
 	if err := utils.UnmarshalJsonRequest(r, &createRequest); err != nil {
@@ -272,22 +298,6 @@ func (a *Application) deleteChatRoom(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 	w.WriteHeader(http.StatusOK)
-}
-
-func (a *Application) listChatRooms(w http.ResponseWriter, r *http.Request) {
-	chatRoomList, err := a.repository.ListChatRooms()
-	if err != nil {
-		log.Println(err)
-		http.Error(w, "Sorry, try again later", http.StatusInternalServerError)
-		return
-	}
-	responseBody, err := json.Marshal(chatRoomList)
-	if err != nil {
-		http.Error(w, "Unable to send JSON response", http.StatusInternalServerError)
-		return
-	}
-	w.WriteHeader(http.StatusOK)
-	w.Write(responseBody)
 }
 
 func (a *Application) acceptChatConnection(w http.ResponseWriter, r *http.Request) {
