@@ -64,30 +64,36 @@ func NewApp(hashKey, blockKey string) *Application {
 
 func (a *Application) SetupRouter() *mux.Router {
 	r := mux.NewRouter()
+	r.StrictSlash(true)
 	// Serve static files
 	r.PathPrefix(staticDir).Handler(http.StripPrefix(staticDir, http.FileServer(http.Dir(a.staticFilesPath))))
-	// Authentication handler
-
 	// Main pages
-	r.HandleFunc("/", a.serveHomePage).Methods("GET")
-	r.HandleFunc("/login", a.loginHandler).Methods("GET", "POST")
-	r.HandleFunc("/register", a.registrationHandler).Methods("POST")
+	r.Handle("/", a.checkAuthentication(http.HandlerFunc(a.serveHomePage))).Methods("GET")
+	r.Handle("/login", http.HandlerFunc(a.loginHandler)).Methods("GET", "POST")
+	r.Handle("/register", a.checkAuthentication(http.HandlerFunc(a.registrationHandler))).Methods("POST")
 	// API router
 	api := r.PathPrefix("/api").Subrouter()
-	api.HandleFunc("/chatroom", a.chatRoomHandler).Methods("POST")
-	api.HandleFunc("/chatroom/{name}", a.chatRoomHandler).Methods("DELETE")
-	api.HandleFunc("/chatroom/list", a.listChatRooms).Methods("GET")
+	api.Handle("/chatroom", a.checkAuthentication(http.HandlerFunc(a.chatRoomHandler))).Methods("POST")
+	api.Handle("/chatroom/{name}", a.checkAuthentication(http.HandlerFunc(a.chatRoomHandler))).Methods("DELETE")
+	api.Handle("/chatroom/list", a.checkAuthentication(http.HandlerFunc(a.listChatRooms))).Methods("GET")
 	return r
+}
+
+func (a *Application) checkAuthentication(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !a.isUserAuthenticated(r) && r.URL.Path != "/login" {
+			// Redirect unauthorized users
+			log.Println("Redirecting user to login")
+			http.Redirect(w, r, "/login", http.StatusMovedPermanently)
+		} else {
+			next.ServeHTTP(w, r)
+		}
+	})
 }
 
 func (a *Application) serveHomePage(w http.ResponseWriter, r *http.Request) {
 	log.Println("GET /")
-	if a.isUserAuthenticated(r) {
-		a.serveHtmlPage(w, r, "index")
-	} else {
-		// Redirect unauthorized users
-		a.serveHtmlPage(w, r, "login")
-	}
+	a.serveHtmlPage(w, r, "login")
 }
 
 func (a *Application) loginHandler(w http.ResponseWriter, r *http.Request) {
@@ -205,7 +211,6 @@ func (a *Application) createUserSession(w http.ResponseWriter, r *http.Request, 
 }
 
 func (a *Application) isUserAuthenticated(r *http.Request) bool {
-	log.Println("isUserAuthenticated")
 	cookieName := "user_session"
 	if cookie, err := r.Cookie(cookieName); err == nil {
 		var sessionValues map[string]string
@@ -215,7 +220,6 @@ func (a *Application) isUserAuthenticated(r *http.Request) bool {
 		}
 		return sessionValues["authenticated"] == "true"
 	}
-	log.Println("Cookie not set")
 	return false
 }
 
