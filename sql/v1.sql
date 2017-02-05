@@ -15,7 +15,12 @@ CREATE TABLE IF NOT EXISTS chat_rooms (
     UNIQUE (name, created_by)
 );
 
-CREATE TABLE chat_messages (
+CREATE TABLE IF NOT EXISTS chat_members (
+    member_id integer REFERENCES chat_users,
+    room_id integer REFERENCES chat_rooms
+);
+
+CREATE TABLE IF NOT EXISTS chat_messages (
     id serial PRIMARY KEY,
     time_sent TIMESTAMP,
     sent_by integer REFERENCES chat_users,
