@@ -22,9 +22,12 @@ func UnmarshalJsonRequest(r *http.Request, model interface{}) error {
 	return nil
 }
 
-func HandlePqError(w http.ResponseWriter, pqErr *pq.Error, message string) {
+func HandlePqError(w http.ResponseWriter, pqErr *pq.Error, uniqueMessage string) {
 	log.Println(pqErr.Code.Name())
-	if pqErr.Code.Name() == "unique_violation" {
-		http.Error(w, message, http.StatusBadRequest)
+	switch pqErr.Code.Name() {
+	case "unique_violation":
+		http.Error(w, uniqueMessage, http.StatusBadRequest)
+	default:
+		http.Error(w, "Sorry, something went wrong. Please try again later.", http.StatusInternalServerError)
 	}
 }

@@ -70,7 +70,7 @@ func (a *Application) SetupRouter() *mux.Router {
 	// Main pages
 	r.Handle("/", a.checkAuthentication(a.indexHandler())).Methods("GET")
 	r.Handle("/login", a.loginHandler()).Methods("GET", "POST")
-	r.Handle("/register", a.checkAuthentication(a.registrationHandler())).Methods("POST")
+	r.Handle("/register", a.registrationHandler()).Methods("POST")
 	// API router
 	api := r.PathPrefix("/api").Subrouter()
 	api.Handle("/chatroom", a.checkAuthentication(a.chatRoomHandler())).Methods("POST")
@@ -274,12 +274,12 @@ func (a *Application) createChatRoom(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if createRequest.Name == "" || createRequest.CreatedBy == "" {
+	if createRequest.RoomName == "" || createRequest.CreatedBy == "" {
 		http.Error(w, `"name" and "createdBy" fields cannot be empty`, http.StatusBadRequest)
 		return
 	}
 
-	err := a.repository.CreateChatRoom(createRequest.Name, createRequest.CreatedBy)
+	err := a.repository.CreateChatRoom(createRequest.RoomName, createRequest.CreatedBy)
 	if err != nil {
 		if pqErr, ok := err.(*pq.Error); ok {
 			message := "A chat room with that name has already been created by " + createRequest.CreatedBy

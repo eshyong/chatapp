@@ -14,14 +14,14 @@ type ChatUser struct {
 }
 
 type CreateChatRoomRequest struct {
-	Name      string
+	RoomName  string
 	CreatedBy string
 }
 
 type ChatRoom struct {
 	Id        int    `json:"id"`
-	Name      string `json:"name"`
-	CreatedBy int    `json:"createdBy"`
+	RoomName  string `json:"roomName"`
+	CreatedBy string `json:"createdBy"`
 }
 
 type ChatRoomList struct {
