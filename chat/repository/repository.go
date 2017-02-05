@@ -66,11 +66,32 @@ func (r *Repository) CreateChatRoom(roomName, createdBy string) error {
 	return nil
 }
 
-
 func (r *Repository) DeleteChatRoom(roomName string) error {
 	_, err := r.dbConn.Exec("DELETE FROM data.chat_rooms WHERE name=$1", roomName)
 	if err != nil {
 		return err
 	}
 	return nil
+}
+
+func (r *Repository) ListChatRooms() (*models.ChatRoomList, error) {
+	rows, err := r.dbConn.Query("SELECT id, name, created_by FROM data.chat_rooms")
+	if err != nil {
+		return nil, err
+	}
+	chatRoomList := &models.ChatRoomList{
+		Results: []*models.ChatRoom{},
+	}
+	defer rows.Close()
+	for rows.Next() {
+		chatRoom := &models.ChatRoom{}
+		if err := rows.Scan(&chatRoom.Id, &chatRoom.Name, &chatRoom.CreatedBy); err != nil {
+			return nil, err
+		}
+		chatRoomList.Results = append(chatRoomList.Results, chatRoom)
+	}
+	if rows.Err() != nil {
+		return nil, rows.Err()
+	}
+	return chatRoomList, nil
 }

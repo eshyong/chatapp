@@ -3,9 +3,10 @@ package utils
 import (
 	"encoding/json"
 	"io/ioutil"
-	"net/http"
-	"github.com/lib/pq"
 	"log"
+	"net/http"
+
+	"github.com/lib/pq"
 )
 
 func UnmarshalJsonRequest(r *http.Request, model interface{}) error {

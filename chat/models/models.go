@@ -19,7 +19,11 @@ type CreateChatRoomRequest struct {
 }
 
 type ChatRoom struct {
-	Id        int
-	Name      string
-	CreatedBy int
+	Id        int    `json:"id"`
+	Name      string `json:"name"`
+	CreatedBy int    `json:"createdBy"`
+}
+
+type ChatRoomList struct {
+	Results []*ChatRoom `json:"results"`
 }

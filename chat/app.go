@@ -2,6 +2,7 @@ package chat
 
 import (
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"log"
 	"net/http"
@@ -63,12 +64,19 @@ func NewApp(hashKey, blockKey string) *Application {
 
 func (a *Application) SetupRouter() *mux.Router {
 	r := mux.NewRouter()
+	// Serve static files
 	r.PathPrefix(staticDir).Handler(http.StripPrefix(staticDir, http.FileServer(http.Dir(a.staticFilesPath))))
+	// Authentication handler
+
+	// Main pages
 	r.HandleFunc("/", a.serveHomePage).Methods("GET")
 	r.HandleFunc("/login", a.loginHandler).Methods("GET", "POST")
 	r.HandleFunc("/register", a.registrationHandler).Methods("POST")
-	r.HandleFunc("/chatroom", a.chatRoomHandler).Methods("POST")
-	r.HandleFunc("/chatroom/{name}", a.chatRoomHandler).Methods("DELETE")
+	// API router
+	api := r.PathPrefix("/api").Subrouter()
+	api.HandleFunc("/chatroom", a.chatRoomHandler).Methods("POST")
+	api.HandleFunc("/chatroom/{name}", a.chatRoomHandler).Methods("DELETE")
+	api.HandleFunc("/chatroom/list", a.listChatRooms).Methods("GET")
 	return r
 }
 
@@ -251,7 +259,7 @@ func (a *Application) createChatRoom(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	w.WriteHeader(200)
+	w.WriteHeader(http.StatusOK)
 }
 
 func (a *Application) deleteChatRoom(w http.ResponseWriter, r *http.Request) {
@@ -259,7 +267,23 @@ func (a *Application) deleteChatRoom(w http.ResponseWriter, r *http.Request) {
 	if err := a.repository.DeleteChatRoom(roomName); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
-	w.WriteHeader(200)
+	w.WriteHeader(http.StatusOK)
+}
+
+func (a *Application) listChatRooms(w http.ResponseWriter, r *http.Request) {
+	chatRoomList, err := a.repository.ListChatRooms()
+	if err != nil {
+		log.Println(err)
+		http.Error(w, "Sorry, try again later", http.StatusInternalServerError)
+		return
+	}
+	responseBody, err := json.Marshal(chatRoomList)
+	if err != nil {
+		http.Error(w, "Unable to send JSON response", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+	w.Write(responseBody)
 }
 
 func (a *Application) acceptChatConnection(w http.ResponseWriter, r *http.Request) {
