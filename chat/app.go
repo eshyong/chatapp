@@ -73,10 +73,30 @@ func (a *Application) SetupRouter() *mux.Router {
 	r.Handle("/register", a.registrationHandler()).Methods("POST")
 	// API router
 	api := r.PathPrefix("/api").Subrouter()
+	api.Handle("/authenticated", a.isAuthenticated())
 	api.Handle("/chatroom", a.checkAuthentication(a.chatRoomHandler())).Methods("POST")
 	api.Handle("/chatroom/{name}", a.checkAuthentication(a.chatRoomHandler())).Methods("DELETE")
 	api.Handle("/chatroom/list", a.checkAuthentication(a.listChatRoomsHandler())).Methods("GET")
 	return r
+}
+
+type AuthStatus struct {
+	Authenticated bool `json:"authenticated"`
+}
+
+func (a *Application) isAuthenticated() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		auth := &AuthStatus{
+			Authenticated: a.isUserAuthenticated(r),
+		}
+		body, err := json.Marshal(auth)
+		if err != nil {
+			http.Error(w, "", http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		w.Write(body)
+	})
 }
 
 func (a *Application) checkAuthentication(next http.Handler) http.Handler {

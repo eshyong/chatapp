@@ -1,5 +1,25 @@
 body {
+  font-family: Helvetica, sans-serif;
   margin: 0;
   padding: 0;
-  font-family: sans-serif;
+}
+
+input[type=text] {
+  border-radius: 3px;
+  border-width: 1px;
+  font-size: 18px;
+  height: 25px;
+  margin: 3px;
+}
+
+input[type=password] {
+  border-radius: 3px;
+  border-width: 1px;
+  font-size: 18px;
+  height: 25px;
+  margin: 3px;
+}
+
+input[type=button] {
+  display: block;
 }

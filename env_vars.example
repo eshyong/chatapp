@@ -1,3 +1,6 @@
+# If developing locally, set this to true for the webpack server to use HTTPS
+# export HTTPS=true
+
 # Fill these values in before running the app
 # HTTP/HTTPS ports to run the server on. Defaults are 8080 and 8443.
 export CHATAPP_HTTP_PORT=

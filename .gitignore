@@ -2,3 +2,4 @@
 data
 env_vars
 **/scripts.iml
+npm-debug.log
