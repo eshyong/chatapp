@@ -3,4 +3,4 @@
 set -ex
 
 pushd frontend
-npm start
+HTTPS=true npm start
