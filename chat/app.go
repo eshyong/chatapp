@@ -67,13 +67,17 @@ func (a *Application) SetupRouter() *mux.Router {
 	r.StrictSlash(true)
 	// Serve static files
 	r.PathPrefix(staticDir).Handler(http.StripPrefix(staticDir, http.FileServer(http.Dir(a.staticFilesPath))))
+
 	// Main pages
 	r.Handle("/", a.checkAuthentication(a.indexHandler())).Methods("GET")
 	r.Handle("/login", a.loginHandler()).Methods("GET", "POST")
 	r.Handle("/register", a.registrationHandler()).Methods("POST")
+
+	// User auth
+	r.Handle("/user/authenticated", a.isAuthenticated())
+
 	// API router
 	api := r.PathPrefix("/api").Subrouter()
-	api.Handle("/authenticated", a.isAuthenticated())
 	api.Handle("/chatroom", a.checkAuthentication(a.chatRoomHandler())).Methods("POST")
 	api.Handle("/chatroom/{name}", a.checkAuthentication(a.chatRoomHandler())).Methods("DELETE")
 	api.Handle("/chatroom/list", a.checkAuthentication(a.listChatRoomsHandler())).Methods("GET")
@@ -148,8 +152,10 @@ func (a *Application) registrationHandler() http.Handler {
 		if err := a.registerUser(registerRequest); err != nil {
 			log.Println("Application.registerUser: ", err)
 			if pqErr, ok := err.(*pq.Error); ok {
-				utils.HandlePqError(w, pqErr, "A user with that name already exists")
-				return
+				if pqErr.Code.Name() == "unique_violation" {
+					http.Error(w, "A user with that name already exists", http.StatusBadRequest)
+					return
+				}
 			}
 			http.Error(w, "Sorry, something went wrong. Please try again later", http.StatusInternalServerError)
 			return
@@ -302,11 +308,12 @@ func (a *Application) createChatRoom(w http.ResponseWriter, r *http.Request) {
 	err := a.repository.CreateChatRoom(createRequest.RoomName, createRequest.CreatedBy)
 	if err != nil {
 		if pqErr, ok := err.(*pq.Error); ok {
-			message := "A chat room with that name has already been created by " + createRequest.CreatedBy
-			utils.HandlePqError(w, pqErr, message)
-			return
+			if pqErr.Code.Name() == "unique_violation" {
+				http.Error(w, "A chat room with that name has already been created by "+createRequest.CreatedBy, http.StatusBadRequest)
+				return
+			}
 		}
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, "Sorry, something went wrong. Please try again later", http.StatusInternalServerError)
 		return
 	}
 	w.WriteHeader(http.StatusOK)

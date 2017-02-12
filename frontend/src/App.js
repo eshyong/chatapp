@@ -3,40 +3,6 @@ import React, { Component } from 'react';
 import Chat from './Chat';
 import Login from './Login';
 
-function Navbar(props) {
-  let navbarItems = props.navbarItems.map((item, index) => {
-    return (
-      <div key={index} style={{flexGrow: 1}}>
-        <a
-          style={{
-            background: 'lightskyblue',
-            border: '1px solid #000',
-            borderRadius: '5px',
-            color: 'white',
-            display: 'block',
-            height: '20px',
-            padding: '10px',
-            textAlign: 'center',
-            textDecoration: 'none'
-          }}
-          href={item.link}
-        >
-          {item.label}
-        </a>
-      </div>
-    );
-  });
-  return (
-    <div style={{
-      display: 'flex',
-      flexDirection: 'row',
-      width: '30%'
-    }}>
-      {navbarItems}
-    </div>
-  )
-}
-
 class App extends Component {
   constructor(props) {
     super(props);
@@ -52,7 +18,7 @@ class App extends Component {
         route: window.location.hash.substr(1)
       });
     });
-    fetch('/api/authenticated').then((response) => {
+    fetch('/user/authenticated').then((response) => {
       if (response.ok) {
         return response.json();
       }
@@ -88,16 +54,6 @@ class App extends Component {
 
     return (
       <div>
-        <Navbar navbarItems={[
-          {
-            link: '#',
-            label: 'Home'
-          },
-          {
-            link: '#login',
-            label: 'Login'
-          }
-        ]}/>
         <Child/>
       </div>
     );
