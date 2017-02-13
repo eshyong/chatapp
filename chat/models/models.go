@@ -27,3 +27,8 @@ type ChatRoom struct {
 type ChatRoomList struct {
 	Results []*ChatRoom `json:"results"`
 }
+
+type UserInfo struct {
+	Authenticated bool   `json:"authenticated"`
+	UserName      string `json:"userName"`
+}

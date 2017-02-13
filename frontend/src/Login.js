@@ -56,7 +56,7 @@ class LoginForm extends Component {
         <h2>Login here</h2>
         <input className="userName" type="text" placeholder="User name" onKeyUp={this.onKeyUp}/>
         <input className="password" type="password" placeholder="Password" onKeyUp={this.onKeyUp}/>
-        <input id="loginButton" type="submit" value="Login"/>
+        <input type="submit" value="Login"/>
       </form>
     );
   }
@@ -121,7 +121,7 @@ class RegisterForm extends Component {
         <input className="userName" type="text" placeholder="User name" onKeyUp={this.onKeyUp}/>
         <input className="password" type="password" placeholder="Password" onKeyUp={this.onKeyUp}/>
         <input className="confirmation" type="password" placeholder="Confirm password" onKeyUp={this.onKeyUp}/>
-        <input className="registerButton" type="submit" value="Register"/>
+        <input type="submit" value="Register"/>
       </form>
     );
   }

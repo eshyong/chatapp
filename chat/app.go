@@ -74,7 +74,7 @@ func (a *Application) SetupRouter() *mux.Router {
 	r.Handle("/register", a.registrationHandler()).Methods("POST")
 
 	// User auth
-	r.Handle("/user/authenticated", a.isAuthenticated())
+	r.Handle("/user/current", a.userInfo())
 
 	// API router
 	api := r.PathPrefix("/api").Subrouter()
@@ -84,17 +84,20 @@ func (a *Application) SetupRouter() *mux.Router {
 	return r
 }
 
-type AuthStatus struct {
-	Authenticated bool `json:"authenticated"`
-}
-
-func (a *Application) isAuthenticated() http.Handler {
+func (a *Application) userInfo() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		auth := &AuthStatus{
-			Authenticated: a.isUserAuthenticated(r),
-		}
-		body, err := json.Marshal(auth)
+		user, err := a.getUserInfo(r)
 		if err != nil {
+			if err == http.ErrNoCookie {
+				http.Error(w, "Your session expired. Please reauthenticate", http.StatusBadRequest)
+				return
+			}
+			http.Error(w, "", http.StatusBadRequest)
+			return
+		}
+		body, err := json.Marshal(user)
+		if err != nil {
+			log.Println(err)
 			http.Error(w, "", http.StatusInternalServerError)
 			return
 		}
@@ -250,10 +253,10 @@ func (a *Application) loginUser(w http.ResponseWriter, r *http.Request) {
 func (a *Application) createUserSession(w http.ResponseWriter, r *http.Request, userName string) error {
 	log.Println("createUserSession")
 	session := map[string]string{
-		"user_name":     userName,
+		"userName":      userName,
 		"authenticated": "true",
 	}
-	cookieName := "user_session"
+	cookieName := "userSession"
 	encoded, err := a.secureCookie.Encode(cookieName, session)
 	if err != nil {
 		log.Println("Unable to set cookie")
@@ -268,20 +271,35 @@ func (a *Application) createUserSession(w http.ResponseWriter, r *http.Request, 
 		MaxAge:   cookieMaxAge,
 	}
 	http.SetCookie(w, cookie)
+	log.Println("Authenticated user " + userName)
 	return nil
 }
 
-func (a *Application) isUserAuthenticated(r *http.Request) bool {
-	cookieName := "user_session"
-	if cookie, err := r.Cookie(cookieName); err == nil {
-		var sessionValues map[string]string
-		if err = a.secureCookie.Decode(cookieName, cookie.Value, &sessionValues); err != nil {
-			log.Println(err)
-			return false
-		}
-		return sessionValues["authenticated"] == "true"
+func (a *Application) getUserInfo(r *http.Request) (*models.UserInfo, error) {
+	cookieName := "userSession"
+	cookie, err := r.Cookie(cookieName)
+	if err != nil {
+		log.Println(err.Error())
+		return nil, err
 	}
-	return false
+	var sessionValues map[string]string
+	if err = a.secureCookie.Decode(cookieName, cookie.Value, &sessionValues); err != nil {
+		log.Println(err)
+		return nil, err
+	}
+
+	return &models.UserInfo{
+		Authenticated: sessionValues["authenticated"] == "true",
+		UserName:      sessionValues["userName"],
+	}, nil
+}
+
+func (a *Application) isUserAuthenticated(r *http.Request) bool {
+	userInfo, err := a.getUserInfo(r)
+	if err != nil {
+		return false
+	}
+	return userInfo.Authenticated
 }
 
 func (a *Application) registerUser(r *models.RegisterRequest) error {
@@ -309,7 +327,7 @@ func (a *Application) createChatRoom(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if pqErr, ok := err.(*pq.Error); ok {
 			if pqErr.Code.Name() == "unique_violation" {
-				http.Error(w, "A chat room with that name has already been created by "+createRequest.CreatedBy, http.StatusBadRequest)
+				http.Error(w, "A chat room with that name has already been created", http.StatusBadRequest)
 				return
 			}
 		}
