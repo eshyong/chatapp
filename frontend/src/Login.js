@@ -40,8 +40,9 @@ class LoginForm extends Component {
     })
     .then((response) => {
       if (response.ok) {
-        // Success
+        // Success, redirect to home page
         console.log('Logged in');
+        this.props.router.push('/');
       } else {
         // Failure
         response.text().then(this.props.showError);
@@ -96,8 +97,9 @@ class RegisterForm extends Component {
     })
     .then((response) => {
       if (response.ok) {
-        // Success
+        // Success, redirect to home page
         console.log('Registered');
+        this.props.router.push('/');
       } else {
         // Failure
         response.text().then(this.props.showError);
@@ -154,15 +156,26 @@ class Login extends Component {
       flexDirection: 'column'
     };
     let errorStyling = {
-      color: 'red',
-      display: this.state.error ? '' : 'none'
+      color: 'red'
     };
 
     return (
       <div>
-        <div className="errorMessage" style={errorStyling}>{this.state.message}</div>
-          <LoginForm style={formStyling} showError={this.showError} clearError={this.clearError}/>
-          <RegisterForm style={formStyling} showError={this.showError} clearError={this.clearError}/>
+        {this.state.error && (
+          <div className="errorMessage" style={errorStyling}>{this.state.message}</div>
+        )}
+          <LoginForm
+            style={formStyling}
+            showError={this.showError}
+            clearError={this.clearError}
+            router={this.props.router}
+          />
+          <RegisterForm
+            style={formStyling}
+            showError={this.showError}
+            clearError={this.clearError}
+            router={this.props.router}
+          />
       </div>
     );
   }
