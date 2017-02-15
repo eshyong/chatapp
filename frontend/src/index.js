@@ -1,6 +1,5 @@
 import React from 'react';
 import ReactDOM from 'react-dom';
-import { Router, Route, hashHistory, browserHistory, withRouter } from 'react-router';
 
 import ChatApp from './ChatApp';
 import Login from './Login';
