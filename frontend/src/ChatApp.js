@@ -116,7 +116,7 @@ class ChatRooms extends Component {
     } else {
       let chatRoomLinks = this.state.chatRooms.map((room) => {
         return (
-          <li>{room.name}</li>
+          <li key={room.name}>{room.name}</li>
         )
       });
       chatRoomList = <ul>{chatRoomLinks}</ul>;
