@@ -38,20 +38,14 @@ class ChatRooms extends Component {
     })
     .then((response) => {
       if (response.ok) {
-        return response.json();
+        response.json().then((responseJson) => {
+          this.setState({
+            chatRooms: responseJson.results
+          })
+        });
       } else {
         response.text().then(this.showError);
       }
-    })
-    .then((chatRooms) => {
-      this.setState({
-        chatRooms: chatRooms.results.map((room) => {
-          return {
-            name: room.roomName,
-            createdBy: room.createdBy
-          };
-        })
-      });
     });
   }
 
@@ -94,34 +88,29 @@ class ChatRooms extends Component {
     })
     .then((response) => {
       if (response.ok) {
-        let newRoom = {
-          name: this.state.newRoomName,
-          createdBy: this.state.userName
-        };
         this.setState({
-          newRoomName: '',
-          chatRooms: this.state.chatRooms.concat([newRoom])
+          newRoomName: ''
         });
       } else {
         response.text().then(this.showError);
       }
     });
-    this.fetchChatRooms();
   };
 
   render() {
     let chatRoomList;
+    let errorStyling = {color: 'red'};
+
     if (this.state.chatRooms.length === 0) {
       chatRoomList = <p><i>No chat rooms available. Try creating one above!</i></p>;
     } else {
       let chatRoomLinks = this.state.chatRooms.map((room) => {
         return (
-          <li key={room.name}>{room.name}</li>
+          <li key={room.id}>{room.roomName}</li>
         )
       });
       chatRoomList = <ul>{chatRoomLinks}</ul>;
     }
-    let errorStyling = {color: 'red'};
 
     return (
       <div className="ChatRooms" style={this.props.style}>
@@ -144,27 +133,101 @@ class ChatRooms extends Component {
   }
 }
 
-class ChatApp extends Component {
+class ChatWindow extends Component {
+  constructor(props) {
+    super(props);
+    this.state = {
+      newMessage: '',
+      messages: [],
+    }
+  }
+
+  setUserInput = (event) => {
+    this.setState({
+      newMessage: event.target.value
+    });
+  };
+
+  sendUserMessage = (event) => {
+    event.preventDefault();
+
+    let newMessage = this.state.newMessage.trim();
+    if (!newMessage) {
+      return;
+    }
+
+    let messages = this.state.messages.concat(newMessage);
+    this.setState({
+      messages: messages,
+    });
+
+    // Clear the input field
+    document.querySelector('.userInput').value = '';
+  };
+
   render() {
     let containerStyling = {
-      display: 'flex'
+      display: 'flex',
+      flexDirection: 'column',
+    };
+    let messagesStyling = {
+      flex: 5,
+      // This is a hack right now to get scrolling to work
+      height: '400px',
+      maxHeight: '400px',
+      overflowX: 'hidden',
+      overflowY: 'scroll',
+      wordWrap: 'break-word',
+    };
+    let textStyling = {
+      flex: 1,
+      width: '80%'
+    };
+    let messages = this.state.messages.map((message, index) => {
+      return <div key={index}>{message}</div>
+    });
+
+    return (
+      <div className="ChatWindow" style={this.props.style}>
+        <div>Chat here</div>
+        <div className="chatContainer" style={containerStyling}>
+          <div className="chatMessages" style={messagesStyling}>
+            {messages}
+          </div>
+          <form className="textBox" onSubmit={this.sendUserMessage}>
+            <input className="userInput" type="text" style={textStyling} onKeyUp={this.setUserInput}/>
+          </form>
+        </div>
+      </div>
+    )
+  }
+}
+
+class ChatApp extends Component {
+  render() {
+    let ChatStyling = {
+      height: '100%',
+      width: '100%'
+    };
+    let containerStyling = {
+      display: 'flex',
+      height: '100%',
+      width: '100%'
     };
     let chatRoomsStyling = {
       display: 'flex',
       flexDirection: 'column',
       flex: 1
     };
-    let chatWindowsStyling = {
+    let chatBoxStyling = {
       flex: 3
     };
 
     return (
-      <div className="Chat">
+      <div className="Chat" style={ChatStyling}>
         <div className="container" style={containerStyling}>
           <ChatRooms style={chatRoomsStyling}/>
-          <div className="chat-window" style={chatWindowsStyling}>
-            <p>Chat here</p>
-          </div>
+          <ChatWindow style={chatBoxStyling}/>
         </div>
       </div>
     );
