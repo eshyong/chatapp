@@ -42,7 +42,7 @@ class LoginForm extends Component {
       if (response.ok) {
         // Success, redirect to home page
         console.log('Logged in');
-        this.props.router.push('/');
+        window.location.href = '/';
       } else {
         // Failure
         response.text().then(this.props.showError);
@@ -99,7 +99,7 @@ class RegisterForm extends Component {
       if (response.ok) {
         // Success, redirect to home page
         console.log('Registered');
-        this.props.router.push('/');
+        window.location.href = '/';
       } else {
         // Failure
         response.text().then(this.props.showError);
@@ -168,13 +168,11 @@ class Login extends Component {
             style={formStyling}
             showError={this.showError}
             clearError={this.clearError}
-            router={this.props.router}
           />
           <RegisterForm
             style={formStyling}
             showError={this.showError}
             clearError={this.clearError}
-            router={this.props.router}
           />
       </div>
     );
