@@ -3,4 +3,4 @@
 set -ex
 
 source ./env_vars
-make && chatapp
+make fetchdeps && make all && chatapp
