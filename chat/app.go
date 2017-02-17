@@ -21,8 +21,8 @@ import (
 
 const (
 	staticDir = "/static/"
-	// 15 minutes
-	cookieMaxAge = 900
+	// 1 day
+	cookieMaxAge = 86400
 )
 
 type ChatSession struct {
@@ -109,9 +109,7 @@ func (a *Application) userInfo() http.Handler {
 func (a *Application) checkAuthentication(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !a.isUserAuthenticated(r) && r.URL.Path != "/login" {
-			// Redirect unauthorized users
-			log.Println("Redirecting user to login")
-			http.Redirect(w, r, "/login", http.StatusMovedPermanently)
+			http.Error(w, "Please login to access the app", http.StatusUnauthorized)
 		} else {
 			next.ServeHTTP(w, r)
 		}
