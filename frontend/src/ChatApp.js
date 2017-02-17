@@ -6,32 +6,13 @@ class ChatRooms extends Component {
     this.state = {
       chatRooms: [],
       error: false,
-      message: '',
+      errorMessage: '',
       newRoomName: '',
       userName: ''
     }
   }
 
   componentDidMount() {
-    fetch('/user/current', {
-      method: 'GET',
-      credentials: 'same-origin'
-    })
-    .then((response) => {
-      if (response.ok) {
-        response.json().then((info) => {
-          this.setState({
-            userName: info.userName
-          });
-        });
-      } else {
-        response.text().then(this.showError);
-      }
-    });
-    this.fetchChatRooms();
-  }
-
-  fetchChatRooms() {
     fetch('/api/chatroom/list', {
       method: 'GET',
       credentials: 'same-origin'
@@ -43,16 +24,14 @@ class ChatRooms extends Component {
             chatRooms: responseJson.results
           })
         });
-      } else {
-        response.text().then(this.showError);
       }
     });
   }
 
-  showError = (message) => {
+  showError = (errorMessage) => {
     this.setState({
       error: true,
-      message: message
+      errorMessage: errorMessage
     });
   };
 
@@ -122,7 +101,7 @@ class ChatRooms extends Component {
           <input type="submit"/>
         </form>
         {this.state.error && (
-          <div className="errorMessage" style={errorStyling}>{this.state.message}</div>
+          <div className="errorMessage" style={errorStyling}>{this.state.errorMessage}</div>
         )}
         <p>
           <b>All rooms</b>
@@ -204,6 +183,40 @@ class ChatWindow extends Component {
 }
 
 class ChatApp extends Component {
+  constructor(props) {
+    super(props);
+    this.state = {
+      error: false,
+      errorMessage: '',
+      userName: '',
+    };
+  }
+
+  componentDidMount() {
+    fetch('/user/current', {
+      method: 'GET',
+      credentials: 'same-origin'
+    })
+    .then((response) => {
+      if (response.ok) {
+        response.json().then((info) => {
+          this.setState({
+            userName: info.userName
+          });
+        });
+      } else {
+        response.text().then(this.showError);
+      }
+    });
+  }
+
+  showError = (errorMessage) => {
+    this.setState({
+      error: true,
+      errorMessage: errorMessage
+    });
+  };
+
   render() {
     let ChatStyling = {
       height: '100%',
@@ -222,9 +235,15 @@ class ChatApp extends Component {
     let chatBoxStyling = {
       flex: 3
     };
+    let errorStyling = {
+      color: 'red'
+    };
 
     return (
       <div className="Chat" style={ChatStyling}>
+        {this.state.error && (
+          <div className="errorMessage" style={errorStyling}>{this.state.errorMessage}</div>
+        )}
         <div className="container" style={containerStyling}>
           <ChatRooms style={chatRoomsStyling}/>
           <ChatWindow style={chatBoxStyling}/>

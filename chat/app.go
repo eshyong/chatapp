@@ -89,7 +89,7 @@ func (a *Application) userInfo() http.Handler {
 		user, err := a.getUserInfo(r)
 		if err != nil {
 			if err == http.ErrNoCookie {
-				http.Error(w, "Your session expired. Please reauthenticate", http.StatusBadRequest)
+				http.Error(w, "Your session expired. Please login again", http.StatusBadRequest)
 				return
 			}
 			http.Error(w, "", http.StatusBadRequest)
