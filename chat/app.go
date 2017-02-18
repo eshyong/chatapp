@@ -19,6 +19,7 @@ import (
 )
 
 const (
+	// TODO: serve from the public npm build directory
 	staticDir = "/static/"
 	// 1 day
 	cookieMaxAge = 86400
@@ -30,15 +31,24 @@ type ChatSession struct {
 }
 
 type Application struct {
-	chatRooms       map[string][]*ChatSession
-	repository      *repository.Repository
+	// Stores a mapping of room names to the users that are logged into each chat room
+	chatRoomDirectory map[string][]*ChatSession
+
+	// A repository object used for database access
+	repository *repository.Repository
+
+	// HTTP routing/security
 	router          *mux.Router
 	secureCookie    *securecookie.SecureCookie
 	staticFilesPath string
-	upgrader        *websocket.Upgrader
+
+	// Websocket connector
+	upgrader *websocket.Upgrader
 }
 
 func NewApp(hashKey, blockKey string) *Application {
+	// TODO: this is ok for now since postgres is local. If we ever use a remote postgres instance, provision
+	// passwords
 	dbConn, err := sql.Open("postgres", "postgres://chatapp:chatapp@localhost/chatapp?sslmode=disable")
 	if err != nil {
 		log.Fatal(err)
@@ -50,11 +60,11 @@ func NewApp(hashKey, blockKey string) *Application {
 	}
 
 	return &Application{
-		chatRooms:       make(map[string][]*ChatSession),
-		secureCookie:    securecookie.New([]byte(hashKey), []byte(blockKey)),
-		staticFilesPath: filepath.Join(".", staticDir),
+		chatRoomDirectory: make(map[string][]*ChatSession),
+		secureCookie:      securecookie.New([]byte(hashKey), []byte(blockKey)),
+		staticFilesPath:   filepath.Join(".", staticDir),
 		upgrader: &websocket.Upgrader{
-			// TODO: Change these settings before going to production
+			// TODO: Use an environment flag to decide whether to switch on CORS checking
 			CheckOrigin:     func(r *http.Request) bool { return true },
 			ReadBufferSize:  4096,
 			WriteBufferSize: 4096,
@@ -391,7 +401,7 @@ func (a *Application) acceptChatConnection(w http.ResponseWriter, r *http.Reques
 	}
 
 	// Search for an active chat room session, or create one if not present
-	chatRoom, ok := a.chatRooms[roomName]
+	chatRoom, ok := a.chatRoomDirectory[roomName]
 	if !ok {
 		chatRoom = []*ChatSession{}
 	}
@@ -401,7 +411,7 @@ func (a *Application) acceptChatConnection(w http.ResponseWriter, r *http.Reques
 		UserName: userInfo.UserName,
 		UserConn: conn,
 	}
-	a.chatRooms[roomName] = append(chatRoom, newChatSession)
+	a.chatRoomDirectory[roomName] = append(chatRoom, newChatSession)
 	go a.handleChatSession(newChatSession, roomName)
 }
 
@@ -411,6 +421,7 @@ func (a *Application) handleChatSession(chatSession *ChatSession, roomName strin
 		clientMessage := &models.WsClientMessage{}
 		err := chatSession.UserConn.ReadJSON(clientMessage)
 		if err != nil {
+			// TODO: remove user from pool if disconnected, to prevent sending messages to closed sockets
 			log.Println("chatUser.userConn.ReadJSON: ", err)
 			break
 		}
@@ -421,7 +432,7 @@ func (a *Application) handleChatSession(chatSession *ChatSession, roomName strin
 
 func (a *Application) broadcastMessage(roomName, sender string, message *models.WsClientMessage) {
 	log.Println("Sending message from: " + sender)
-	chatRoom, ok := a.chatRooms[roomName]
+	chatRoom, ok := a.chatRoomDirectory[roomName]
 	if !ok {
 		log.Println("User " + sender + "sent message to an unknown chat room: " + roomName)
 		return
