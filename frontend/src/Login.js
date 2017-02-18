@@ -11,9 +11,7 @@ class LoginForm extends Component {
 
   onKeyUp = (event) => {
     // Bind an element's className to its value, and call setState
-    this.setState({
-      [event.target.className]: event.target.value
-    });
+    this.setState({ [event.target.className]: event.target.value });
   };
 
   handleLogin = (event) => {
@@ -109,9 +107,7 @@ class RegisterForm extends Component {
 
   onKeyUp = (event) => {
     // Bind an element's className to its value, and call setState
-    this.setState({
-      [event.target.className]: event.target.value
-    });
+    this.setState({ [event.target.className]: event.target.value });
   };
 
   render() {
@@ -155,9 +151,7 @@ class Login extends Component {
       display: 'flex',
       flexDirection: 'column'
     };
-    let errorStyling = {
-      color: 'red'
-    };
+    let errorStyling = { color: 'red' };
 
     return (
       <div>

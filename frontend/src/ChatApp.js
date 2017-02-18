@@ -25,9 +25,7 @@ class ChatRooms extends Component {
     .then((response) => {
       if (response.ok) {
         response.json().then((responseJson) => {
-          this.setState({
-            chatRooms: responseJson.results
-          })
+          this.setState({ chatRooms: responseJson.results });
         });
       }
     });
@@ -64,9 +62,7 @@ class ChatRooms extends Component {
         roomName: this.state.newRoomName,
         createdBy: this.props.userName
       }),
-      headers: {
-        'Content-Type': 'application/json'
-      },
+      headers: { 'Content-Type': 'application/json' },
       credentials: 'same-origin'
     })
     .then((response) => {
@@ -134,15 +130,11 @@ class ChatRooms extends Component {
 class ChatWindow extends Component {
   constructor(props) {
     super(props);
-    this.state = {
-      newMessage: '',
-    }
+    this.state = { newMessage: '' };
   }
 
   setUserInput = (event) => {
-    this.setState({
-      newMessage: event.target.value
-    });
+    this.setState({ newMessage: event.target.value });
   };
 
   sendUserMessage = (event) => {
@@ -218,9 +210,7 @@ class ChatApp extends Component {
     .then((response) => {
       if (response.ok) {
         response.json().then((info) => {
-          this.setState({
-            userName: info.userName
-          });
+          this.setState({ userName: info.userName });
         });
       } else {
         response.text().then(this.showError);
@@ -257,15 +247,11 @@ class ChatApp extends Component {
       if (response.error) {
         this.showError(response.reason);
       }
-      this.setState({
-        messages: this.state.messages.concat(response.body)
-      });
+      this.setState({ messages: this.state.messages.concat(response.body) });
     };
 
     webSocket.onopen = () => {
-      this.setState({
-        webSocketConn: webSocket
-      });
+      this.setState({ webSocketConn: webSocket });
     };
   };
 
@@ -277,9 +263,7 @@ class ChatApp extends Component {
     };
 
     this.state.webSocketConn.send(JSON.stringify(message));
-    this.setState({
-      messages: this.state.messages.concat(message)
-    });
+    this.setState({ messages: this.state.messages.concat(message) });
   };
 
   render() {
@@ -297,12 +281,8 @@ class ChatApp extends Component {
       flexDirection: 'column',
       flex: 1
     };
-    let chatBoxStyling = {
-      flex: 3
-    };
-    let errorStyling = {
-      color: 'red'
-    };
+    let chatBoxStyling = { flex: 3 };
+    let errorStyling = { color: 'red' };
 
     return (
       <div className="Chat" style={chatStyling}>
