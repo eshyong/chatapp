@@ -87,3 +87,12 @@ func (r *Repository) ListChatRooms() (*models.ChatRoomList, error) {
 	}
 	return chatRoomList, nil
 }
+
+func (r *Repository) FindChatRoomByName(roomName string) (*models.ChatRoom, error) {
+	row := r.dbConn.QueryRow("SELECT id, room_name, created_by FROM data.chat_room WHERE room_name=$1", roomName)
+	chatRoom := &models.ChatRoom{}
+	if err := row.Scan(&chatRoom.Id, &chatRoom.RoomName, &chatRoom.CreatedBy); err != nil {
+		return nil, err
+	}
+	return chatRoom, nil
+}

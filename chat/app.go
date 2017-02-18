@@ -30,7 +30,7 @@ type ChatSession struct {
 }
 
 type Application struct {
-	connectedUsers  []*ChatSession
+	chatRooms       map[string][]*ChatSession
 	repository      *repository.Repository
 	router          *mux.Router
 	secureCookie    *securecookie.SecureCookie
@@ -50,12 +50,14 @@ func NewApp(hashKey, blockKey string) *Application {
 	}
 
 	return &Application{
-		connectedUsers:  []*ChatSession{},
+		chatRooms:       make(map[string][]*ChatSession),
 		secureCookie:    securecookie.New([]byte(hashKey), []byte(blockKey)),
 		staticFilesPath: filepath.Join(".", staticDir),
 		upgrader: &websocket.Upgrader{
-			ReadBufferSize:  1024,
-			WriteBufferSize: 1024,
+			// TODO: Change these settings before going to production
+			CheckOrigin:     func(r *http.Request) bool { return true },
+			ReadBufferSize:  4096,
+			WriteBufferSize: 4096,
 		},
 		repository: repository.NewUserRepository(dbConn),
 	}
@@ -349,41 +351,61 @@ func (a *Application) deleteChatRoom(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *Application) acceptChatConnection(w http.ResponseWriter, r *http.Request) {
+	// Create websocket connection
 	conn, err := a.upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Println(err)
 		return
 	}
-
-	newUser := authenticateUser(conn)
-	if newUser != nil {
-		a.connectedUsers = append(a.connectedUsers, newUser)
-		go a.handleChatSession(newUser)
-	}
-}
-
-// TODO: create a real chat protocol
-func authenticateUser(conn *websocket.Conn) *ChatSession {
 	log.Println("User connected from " + conn.RemoteAddr().String())
-	messageType, message, err := conn.ReadMessage()
-	if messageType != websocket.TextMessage {
-		err = errors.New("Required text message, got binary message instead")
-	}
+
+	// Check if chat room exists in database
+	roomName := mux.Vars(r)["name"]
+	_, err = a.repository.FindChatRoomByName(roomName)
 	if err != nil {
-		log.Println("authenticateUser: ", err)
-		return nil
+		if err == sql.ErrNoRows {
+			conn.WriteJSON(&models.WsServerMessage{
+				Error:  true,
+				Reason: "Could not find room with that name",
+			})
+			conn.Close()
+			return
+		}
+		conn.WriteJSON(&models.WsServerMessage{
+			Error:  true,
+			Reason: "Sorry, please try again later",
+		})
+		conn.Close()
+		return
 	}
 
-	// Create a new user
-	chatSession := &ChatSession{
-		UserName: string(message),
+	// Get user info if possible, and send an error message if not
+	userInfo, err := a.getUserInfo(r)
+	if err != nil {
+		conn.WriteJSON(&models.WsServerMessage{
+			Error:  true,
+			Reason: "Could not find user with that name",
+		})
+		conn.Close()
+		return
+	}
+
+	// Search for an active chat room session, or create one if not present
+	chatRoom, ok := a.chatRooms[roomName]
+	if !ok {
+		chatRoom = []*ChatSession{}
+	}
+
+	// Create a new user session and add it to the chat room
+	newChatSession := &ChatSession{
+		UserName: userInfo.UserName,
 		UserConn: conn,
 	}
-	log.Println("Authenticated user: " + chatSession.UserName)
-	return chatSession
+	a.chatRooms[roomName] = append(chatRoom, newChatSession)
+	go a.handleChatSession(newChatSession, roomName)
 }
 
-func (a *Application) handleChatSession(chatSession *ChatSession) {
+func (a *Application) handleChatSession(chatSession *ChatSession, roomName string) {
 	defer chatSession.UserConn.Close()
 	for {
 		messageType, message, err := chatSession.UserConn.ReadMessage()
@@ -392,25 +414,27 @@ func (a *Application) handleChatSession(chatSession *ChatSession) {
 			break
 		}
 
+		// We only deal with text messages
 		if messageType != websocket.TextMessage {
-			// Send an error to the user
 			chatSession.UserConn.WriteMessage(websocket.TextMessage, []byte("Unable to handle binary messages"))
 			continue
 		}
 
-		a.broadcastMessage(chatSession.UserName, message)
+		a.broadcastMessage(roomName, chatSession.UserName, message)
 	}
 }
 
-func (a *Application) broadcastMessage(sender string, message []byte) {
+func (a *Application) broadcastMessage(roomName, sender string, message []byte) {
 	log.Println("Sending message from: " + sender)
-	for _, user := range a.connectedUsers {
-		// Avoid broadcasting message to sender
-		if user.UserName != sender {
-			log.Println("Sending message to: " + user.UserName)
-			if err := user.UserConn.WriteMessage(websocket.TextMessage, message); err != nil {
-				log.Println("Unable to send message to " + user.UserName)
-				continue
+	chatRoom, ok := a.chatRooms[roomName]
+	if ok {
+		for _, user := range chatRoom {
+			// Avoid broadcasting message to sender
+			if user.UserName != sender {
+				if err := user.UserConn.WriteMessage(websocket.TextMessage, message); err != nil {
+					log.Println("Unable to send message to " + user.UserName)
+					continue
+				}
 			}
 		}
 	}

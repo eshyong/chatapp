@@ -32,3 +32,16 @@ type UserInfo struct {
 	Authenticated bool   `json:"authenticated"`
 	UserName      string `json:"userName"`
 }
+
+// Types for WebSocket messages
+type WsServerMessage struct {
+	Error  bool                 `json:"error"`
+	Reason string               `json:"reason"`
+	Body   *WsServerMessageBody `json:"body"`
+}
+
+type WsServerMessageBody struct {
+	SentBy   string `json:"sentBy"`
+	Contents string `json:"contents"`
+	TimeSent string `json:"timeSent"`
+}

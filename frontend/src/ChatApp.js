@@ -1,5 +1,7 @@
 import React, { Component } from 'react';
 
+const ABNORMAL_CLOSURE_ERR = 1006;
+
 class ChatRooms extends Component {
   constructor(props) {
     super(props);
@@ -70,12 +72,24 @@ class ChatRooms extends Component {
     .then((response) => {
       if (response.ok) {
         this.setState({
+          error: false,
           newRoomName: ''
         });
+        this.fetchRooms();
       } else {
         response.text().then(this.showError);
       }
     });
+  };
+
+  joinChatRoom = (event) => {
+    event.preventDefault();
+
+    let roomName = event.target.innerHTML;
+    let apiEndpoint = encodeURI('/api/chatroom/' + roomName);
+
+    this.props.createWebSocketConnection(apiEndpoint);
+    window.history.pushState({}, '', event.target.href);
   };
 
   render() {
@@ -86,8 +100,11 @@ class ChatRooms extends Component {
       chatRoomList = <p><i>No chat rooms available. Try creating one above!</i></p>;
     } else {
       let chatRoomLinks = this.state.chatRooms.map((room) => {
+        let roomLink = encodeURI('/chatroom/' + room.roomName);
         return (
-          <li key={room.id}>{room.roomName}</li>
+          <li key={room.id}>
+            <a href={roomLink} onClick={this.joinChatRoom}>{room.roomName}</a>
+          </li>
         )
       });
       chatRoomList = <ul>{chatRoomLinks}</ul>;
@@ -190,6 +207,7 @@ class ChatApp extends Component {
     this.state = {
       error: false,
       errorMessage: '',
+      webSocketConn: null,
       userName: '',
     };
   }
@@ -212,11 +230,44 @@ class ChatApp extends Component {
     });
   }
 
+  clearError = () => {
+    this.setState({ error: false });
+  };
+
   showError = (errorMessage) => {
     this.setState({
       error: true,
       errorMessage: errorMessage
     });
+  };
+
+  createWebSocketConnection = (relativeUrl) =>{
+    this.clearError();
+    if (this.state.webSocketConn) {
+      this.state.webSocketConn.close();
+    }
+
+    let webSocket = new WebSocket('ws://' + window.location.host + relativeUrl);
+    webSocket.onclose = (event) => {
+      if (event.code === ABNORMAL_CLOSURE_ERR) {
+        this.showError('Could not connect to chat server');
+      }
+    };
+
+    webSocket.onmessage = (event) => {
+      let response = JSON.parse(event.data);
+      if (response.error) {
+        this.showError(response.reason);
+      }
+      // TODO: chat handling here
+    };
+
+    webSocket.onopen = () => {
+      console.log(webSocket);
+      this.setState({
+        webSocketConn: webSocket
+      });
+    };
   };
 
   render() {
@@ -247,7 +298,11 @@ class ChatApp extends Component {
           <div className="errorMessage" style={errorStyling}>{this.state.errorMessage}</div>
         )}
         <div className="container" style={containerStyling}>
-          <ChatRooms style={chatRoomsStyling} userName={this.state.userName}/>
+          <ChatRooms
+            style={chatRoomsStyling}
+            userName={this.state.userName}
+            createWebSocketConnection={this.createWebSocketConnection}
+          />
           <ChatWindow style={chatBoxStyling}/>
         </div>
       </div>

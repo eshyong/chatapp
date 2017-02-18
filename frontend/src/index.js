@@ -9,17 +9,19 @@ import './index.css';
 
 function main() {
   let path = window.location.pathname;
-  let Root;
+  let Root = NotFound;
 
   if (path === '/') {
-    Root = ChatApp;
+    Root = <ChatApp/>;
   } else if (path === '/login') {
-    Root = Login;
-  } else {
-    Root = NotFound;
+    Root = <Login/>;
+  } else if (path.match(/chatroom\/(\w+)/)) {
+    let roomPath = '/api' + path;
+
+    Root = <ChatApp roomPath={roomPath}/>
   }
 
-  ReactDOM.render(<Root/>, document.getElementById('root'));
+  ReactDOM.render(Root, document.getElementById('root'));
 }
 
 main();
