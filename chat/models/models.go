@@ -14,8 +14,8 @@ type ChatUser struct {
 }
 
 type CreateChatRoomRequest struct {
-	RoomName  string
-	CreatedBy string
+	RoomName  string `json:"roomName"`
+	CreatedBy string `json:"createdBy"`
 }
 
 type ChatRoom struct {

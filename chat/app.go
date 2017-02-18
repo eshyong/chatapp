@@ -15,7 +15,6 @@ import (
 	"github.com/gorilla/securecookie"
 	"github.com/gorilla/websocket"
 	"github.com/lib/pq"
-	_ "github.com/lib/pq"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -79,8 +78,9 @@ func (a *Application) SetupRouter() *mux.Router {
 	// API router
 	api := r.PathPrefix("/api").Subrouter()
 	api.Handle("/chatroom", a.checkAuthentication(a.chatRoomHandler())).Methods("POST")
-	api.Handle("/chatroom/{name}", a.checkAuthentication(a.chatRoomHandler())).Methods("DELETE")
+	// Order matters!
 	api.Handle("/chatroom/list", a.checkAuthentication(a.listChatRoomsHandler())).Methods("GET")
+	api.Handle("/chatroom/{name}", a.checkAuthentication(a.chatRoomHandler())).Methods("GET", "DELETE")
 	return r
 }
 
@@ -174,9 +174,14 @@ func (a *Application) registrationHandler() http.Handler {
 func (a *Application) chatRoomHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
+		case "GET":
+			log.Println("GET /chatroom/{name}")
+			a.acceptChatConnection(w, r)
 		case "POST":
+			log.Println("POST /chatroom")
 			a.createChatRoom(w, r)
 		case "DELETE":
+			log.Println("DELETE /chatroom/{name}")
 			a.deleteChatRoom(w, r)
 		}
 	})
@@ -317,7 +322,7 @@ func (a *Application) createChatRoom(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if createRequest.RoomName == "" || createRequest.CreatedBy == "" {
-		http.Error(w, `"name" and "createdBy" fields cannot be empty`, http.StatusBadRequest)
+		http.Error(w, `"roomName" and "createdBy" fields cannot be empty`, http.StatusBadRequest)
 		return
 	}
 

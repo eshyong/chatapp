@@ -8,11 +8,14 @@ class ChatRooms extends Component {
       error: false,
       errorMessage: '',
       newRoomName: '',
-      userName: ''
     }
   }
 
   componentDidMount() {
+    this.fetchRooms();
+  }
+
+  fetchRooms = () => {
     fetch('/api/chatroom/list', {
       method: 'GET',
       credentials: 'same-origin'
@@ -26,7 +29,7 @@ class ChatRooms extends Component {
         });
       }
     });
-  }
+  };
 
   showError = (errorMessage) => {
     this.setState({
@@ -39,7 +42,6 @@ class ChatRooms extends Component {
     this.setState({
       [event.target.className]: event.target.value
     });
-    console.log(this.state);
   };
 
   createChatRoom = (event) => {
@@ -49,7 +51,7 @@ class ChatRooms extends Component {
       return;
     }
 
-    if (!this.state.userName) {
+    if (!this.props.userName) {
       this.showError('Unable to get username. Please reauthenticate');
       return;
     }
@@ -58,7 +60,7 @@ class ChatRooms extends Component {
       method: 'POST',
       body: JSON.stringify({
         roomName: this.state.newRoomName,
-        createdBy: this.state.userName
+        createdBy: this.props.userName
       }),
       headers: {
         'Content-Type': 'application/json'
@@ -218,7 +220,7 @@ class ChatApp extends Component {
   };
 
   render() {
-    let ChatStyling = {
+    let chatStyling = {
       height: '100%',
       width: '100%'
     };
@@ -240,12 +242,12 @@ class ChatApp extends Component {
     };
 
     return (
-      <div className="Chat" style={ChatStyling}>
+      <div className="Chat" style={chatStyling}>
         {this.state.error && (
           <div className="errorMessage" style={errorStyling}>{this.state.errorMessage}</div>
         )}
         <div className="container" style={containerStyling}>
-          <ChatRooms style={chatRoomsStyling}/>
+          <ChatRooms style={chatRoomsStyling} userName={this.state.userName}/>
           <ChatWindow style={chatBoxStyling}/>
         </div>
       </div>
