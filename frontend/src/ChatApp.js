@@ -250,12 +250,17 @@ class ChatApp extends Component {
       let response = JSON.parse(event.data);
       if (response.error) {
         this.showError(response.reason);
+        return;
       }
       this.setState({ messages: this.state.messages.concat(response.body) });
     };
 
     webSocket.onopen = () => {
-      this.setState({ webSocketConn: webSocket });
+      this.setState({
+        // Clear chat history when switching rooms
+        messages: [],
+        webSocketConn: webSocket
+      });
     };
   };
 

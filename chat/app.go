@@ -30,9 +30,14 @@ type ChatSession struct {
 	UserConn *websocket.Conn
 }
 
+type ChatRoom struct {
+	roomId       int
+	chatSessions []*ChatSession
+}
+
 type Application struct {
-	// Stores a mapping of room names to the users that are logged into each chat room
-	chatRoomDirectory map[string][]*ChatSession
+	// A directory of chat rooms
+	chatRoomDirectory map[string]*ChatRoom
 
 	// A repository object used for database access
 	repository *repository.Repository
@@ -49,6 +54,7 @@ type Application struct {
 func NewApp(hashKey, blockKey string) *Application {
 	// TODO: this is ok for now since postgres is local. If we ever use a remote postgres instance, provision
 	// passwords
+	// TODO: Set schema on connection, so we don't have to specify the schema in all of our queries
 	dbConn, err := sql.Open("postgres", "postgres://chatapp:chatapp@localhost/chatapp?sslmode=disable")
 	if err != nil {
 		log.Fatal(err)
@@ -60,7 +66,7 @@ func NewApp(hashKey, blockKey string) *Application {
 	}
 
 	return &Application{
-		chatRoomDirectory: make(map[string][]*ChatSession),
+		chatRoomDirectory: make(map[string]*ChatRoom),
 		secureCookie:      securecookie.New([]byte(hashKey), []byte(blockKey)),
 		staticFilesPath:   filepath.Join(".", staticDir),
 		upgrader: &websocket.Upgrader{
@@ -369,9 +375,20 @@ func (a *Application) acceptChatConnection(w http.ResponseWriter, r *http.Reques
 	}
 	log.Println("User connected from " + conn.RemoteAddr().String())
 
+	// Get user info if possible, and send an error message if not
+	userInfo, err := a.getUserInfo(r)
+	if err != nil {
+		conn.WriteJSON(&models.WsServerMessage{
+			Error:  true,
+			Reason: "Could not find user with that name",
+		})
+		conn.Close()
+		return
+	}
+
 	// Check if chat room exists in database
 	roomName := mux.Vars(r)["name"]
-	_, err = a.repository.FindChatRoomByName(roomName)
+	roomModel, err := a.repository.FindChatRoomByName(roomName)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			conn.WriteJSON(&models.WsServerMessage{
@@ -388,22 +405,25 @@ func (a *Application) acceptChatConnection(w http.ResponseWriter, r *http.Reques
 		conn.Close()
 		return
 	}
-
-	// Get user info if possible, and send an error message if not
-	userInfo, err := a.getUserInfo(r)
+	chatHistory, err := a.repository.GetChatMessagesByRoomId(roomModel.Id)
 	if err != nil {
-		conn.WriteJSON(&models.WsServerMessage{
-			Error:  true,
-			Reason: "Could not find user with that name",
-		})
+		log.Println(err)
 		conn.Close()
 		return
 	}
+	// TODO: send error
+	conn.WriteJSON(&models.WsServerMessage{
+		Error: false,
+		Body:  chatHistory,
+	})
 
 	// Search for an active chat room session, or create one if not present
 	chatRoom, ok := a.chatRoomDirectory[roomName]
 	if !ok {
-		chatRoom = []*ChatSession{}
+		chatRoom = &ChatRoom{
+			roomId:       roomModel.Id,
+			chatSessions: []*ChatSession{},
+		}
 	}
 
 	// Create a new user session and add it to the chat room
@@ -411,14 +431,15 @@ func (a *Application) acceptChatConnection(w http.ResponseWriter, r *http.Reques
 		UserName: userInfo.UserName,
 		UserConn: conn,
 	}
-	a.chatRoomDirectory[roomName] = append(chatRoom, newChatSession)
+	chatRoom.chatSessions = append(chatRoom.chatSessions, newChatSession)
+	a.chatRoomDirectory[roomName] = chatRoom
 	go a.handleChatSession(newChatSession, roomName)
 }
 
 func (a *Application) handleChatSession(chatSession *ChatSession, roomName string) {
 	defer chatSession.UserConn.Close()
 	for {
-		clientMessage := &models.WsClientMessage{}
+		clientMessage := &models.ChatMessage{}
 		err := chatSession.UserConn.ReadJSON(clientMessage)
 		if err != nil {
 			// TODO: remove user from pool if disconnected, to prevent sending messages to closed sockets
@@ -426,23 +447,29 @@ func (a *Application) handleChatSession(chatSession *ChatSession, roomName strin
 			break
 		}
 
-		a.broadcastMessage(roomName, chatSession.UserName, clientMessage)
+		if room, ok := a.chatRoomDirectory[roomName]; ok {
+			if err := a.repository.InsertChatMessage(room.roomId, clientMessage); err != nil {
+				log.Println("Unable to insert chat message: " + err.Error())
+			}
+		}
+		body := []*models.ChatMessage{clientMessage}
+		a.broadcastMessage(roomName, chatSession.UserName, body)
 	}
 }
 
-func (a *Application) broadcastMessage(roomName, sender string, message *models.WsClientMessage) {
+func (a *Application) broadcastMessage(roomName, sender string, body []*models.ChatMessage) {
 	log.Println("Sending message from: " + sender)
 	chatRoom, ok := a.chatRoomDirectory[roomName]
 	if !ok {
 		log.Println("User " + sender + "sent message to an unknown chat room: " + roomName)
 		return
 	}
-	for _, user := range chatRoom {
+	for _, user := range chatRoom.chatSessions {
 		// Avoid broadcasting message to sender
 		if user.UserName != sender {
 			if err := user.UserConn.WriteJSON(&models.WsServerMessage{
 				Error: false,
-				Body:  message,
+				Body:  body,
 			}); err != nil {
 				// Ignore errors
 				continue

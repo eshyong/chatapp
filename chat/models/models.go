@@ -33,15 +33,18 @@ type UserInfo struct {
 	UserName      string `json:"userName"`
 }
 
-// Types for WebSocket messages
-type WsServerMessage struct {
-	Error  bool             `json:"error"`
-	Reason string           `json:"reason"`
-	Body   *WsClientMessage `json:"body"`
-}
-
-type WsClientMessage struct {
+type ChatMessage struct {
 	SentBy   string `json:"sentBy"`
 	Contents string `json:"contents"`
 	TimeSent string `json:"timeSent"`
+}
+
+// Websocket chat protocol struct
+type WsServerMessage struct {
+	// If there was an error in processing a websocket request, this field will be true
+	Error bool `json:"error"`
+	// A string describing the reason for an error
+	Reason string `json:"reason"`
+	// A variable length slice containing chat messages to send to the client
+	Body []*ChatMessage `json:"body"`
 }
