@@ -39,9 +39,7 @@ class ChatRooms extends Component {
   };
 
   onKeyUp = (event) => {
-    this.setState({
-      [event.target.className]: event.target.value
-    });
+    this.setState({ [event.target.className]: event.target.value });
   };
 
   createChatRoom = (event) => {
@@ -165,7 +163,11 @@ class ChatWindow extends Component {
 
     return (
       <div className="ChatWindow" style={this.props.style}>
-        <div>Chat here</div>
+        <p>
+          <b>
+            {this.props.chatRoomHeader ? this.props.chatRoomHeader : 'Chat here'}
+          </b>
+        </p>
         <div className="chatContainer" style={containerStyling}>
           <div className="chatMessages" style={messagesStyling}>
             {messages}
@@ -183,6 +185,7 @@ class ChatApp extends Component {
   constructor(props) {
     super(props);
     this.state = {
+      chatRoomHeader: '',
       error: false,
       errorMessage: '',
       messages: [],
@@ -225,6 +228,7 @@ class ChatApp extends Component {
     let roomName = event.target.innerHTML;
     let apiEndpoint = encodeURI('/api/chatroom/' + roomName);
 
+    this.setState({ chatRoomHeader: roomName });
     this.createWebSocketConnection(apiEndpoint);
     window.history.pushState({}, '', event.target.href);
   };
@@ -256,6 +260,11 @@ class ChatApp extends Component {
   };
 
   sendWebSocketChatMessage = (contents) => {
+    if (!this.state.chatRoomHeader) {
+      this.showError('You are not in any chat room');
+      return;
+    }
+
     let message = {
       contents: contents,
       sentBy: this.state.userName,
@@ -299,6 +308,7 @@ class ChatApp extends Component {
           <ChatWindow
             style={chatBoxStyling}
             messages={this.state.messages}
+            chatRoomHeader={this.state.chatRoomHeader}
             sendWebSocketChatMessage={this.sendWebSocketChatMessage}
           />
         </div>
