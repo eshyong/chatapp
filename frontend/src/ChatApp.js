@@ -78,19 +78,9 @@ class ChatRooms extends Component {
     });
   };
 
-  joinChatRoom = (event) => {
-    event.preventDefault();
-
-    let roomName = event.target.innerHTML;
-    let apiEndpoint = encodeURI('/api/chatroom/' + roomName);
-
-    this.props.createWebSocketConnection(apiEndpoint);
-    window.history.pushState({}, '', event.target.href);
-  };
-
   render() {
     let chatRoomList;
-    let errorStyling = {color: 'red'};
+    let errorStyling = { color: 'red' };
 
     if (this.state.chatRooms.length === 0) {
       chatRoomList = <p><i>No chat rooms available. Try creating one above!</i></p>;
@@ -99,7 +89,7 @@ class ChatRooms extends Component {
         let roomLink = encodeURI('/chatroom/' + room.roomName);
         return (
           <li key={room.id}>
-            <a href={roomLink} onClick={this.joinChatRoom}>{room.roomName}</a>
+            <a href={roomLink} onClick={this.props.joinChatRoom}>{room.roomName}</a>
           </li>
         )
       });
@@ -229,6 +219,16 @@ class ChatApp extends Component {
     });
   };
 
+  joinChatRoom = (event) => {
+    event.preventDefault();
+
+    let roomName = event.target.innerHTML;
+    let apiEndpoint = encodeURI('/api/chatroom/' + roomName);
+
+    this.createWebSocketConnection(apiEndpoint);
+    window.history.pushState({}, '', event.target.href);
+  };
+
   createWebSocketConnection = (relativeUrl) => {
     this.clearError();
     if (this.state.webSocketConn) {
@@ -293,12 +293,13 @@ class ChatApp extends Component {
           <ChatRooms
             style={chatRoomsStyling}
             userName={this.state.userName}
+            joinChatRoom={this.joinChatRoom}
             createWebSocketConnection={this.createWebSocketConnection}
           />
           <ChatWindow
             style={chatBoxStyling}
-            sendWebSocketChatMessage={this.sendWebSocketChatMessage}
             messages={this.state.messages}
+            sendWebSocketChatMessage={this.sendWebSocketChatMessage}
           />
         </div>
       </div>
