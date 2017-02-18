@@ -136,7 +136,6 @@ class ChatWindow extends Component {
     super(props);
     this.state = {
       newMessage: '',
-      messages: [],
     }
   }
 
@@ -151,13 +150,10 @@ class ChatWindow extends Component {
 
     let newMessage = this.state.newMessage.trim();
     if (!newMessage) {
+      // Don't send empty messages
       return;
     }
-
-    let messages = this.state.messages.concat(newMessage);
-    this.setState({
-      messages: messages,
-    });
+    this.props.sendWebSocketChatMessage(newMessage);
 
     // Clear the input field
     document.querySelector('.userInput').value = '';
@@ -181,8 +177,8 @@ class ChatWindow extends Component {
       flex: 1,
       width: '80%'
     };
-    let messages = this.state.messages.map((message, index) => {
-      return <div key={index}>{message}</div>
+    let messages = this.props.messages.map((message, index) => {
+      return <div key={index}>{message.sentBy + ': ' + message.contents}</div>
     });
 
     return (
@@ -207,12 +203,14 @@ class ChatApp extends Component {
     this.state = {
       error: false,
       errorMessage: '',
+      messages: [],
       webSocketConn: null,
       userName: '',
     };
   }
 
   componentDidMount() {
+    this.clearError();
     fetch('/user/current', {
       method: 'GET',
       credentials: 'same-origin'
@@ -241,13 +239,13 @@ class ChatApp extends Component {
     });
   };
 
-  createWebSocketConnection = (relativeUrl) =>{
+  createWebSocketConnection = (relativeUrl) => {
     this.clearError();
     if (this.state.webSocketConn) {
       this.state.webSocketConn.close();
     }
 
-    let webSocket = new WebSocket('ws://' + window.location.host + relativeUrl);
+    let webSocket = new WebSocket('wss://' + window.location.host + relativeUrl);
     webSocket.onclose = (event) => {
       if (event.code === ABNORMAL_CLOSURE_ERR) {
         this.showError('Could not connect to chat server');
@@ -259,15 +257,29 @@ class ChatApp extends Component {
       if (response.error) {
         this.showError(response.reason);
       }
-      // TODO: chat handling here
+      this.setState({
+        messages: this.state.messages.concat(response.body)
+      });
     };
 
     webSocket.onopen = () => {
-      console.log(webSocket);
       this.setState({
         webSocketConn: webSocket
       });
     };
+  };
+
+  sendWebSocketChatMessage = (contents) => {
+    let message = {
+      contents: contents,
+      sentBy: this.state.userName,
+      timeSent: new Date(),
+    };
+
+    this.state.webSocketConn.send(JSON.stringify(message));
+    this.setState({
+      messages: this.state.messages.concat(message)
+    });
   };
 
   render() {
@@ -303,7 +315,11 @@ class ChatApp extends Component {
             userName={this.state.userName}
             createWebSocketConnection={this.createWebSocketConnection}
           />
-          <ChatWindow style={chatBoxStyling}/>
+          <ChatWindow
+            style={chatBoxStyling}
+            sendWebSocketChatMessage={this.sendWebSocketChatMessage}
+            messages={this.state.messages}
+          />
         </div>
       </div>
     );

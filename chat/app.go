@@ -408,33 +408,33 @@ func (a *Application) acceptChatConnection(w http.ResponseWriter, r *http.Reques
 func (a *Application) handleChatSession(chatSession *ChatSession, roomName string) {
 	defer chatSession.UserConn.Close()
 	for {
-		messageType, message, err := chatSession.UserConn.ReadMessage()
+		clientMessage := &models.WsClientMessage{}
+		err := chatSession.UserConn.ReadJSON(clientMessage)
 		if err != nil {
-			log.Println("chatUser.userConn.ReadMessage: ", err)
+			log.Println("chatUser.userConn.ReadJSON: ", err)
 			break
 		}
 
-		// We only deal with text messages
-		if messageType != websocket.TextMessage {
-			chatSession.UserConn.WriteMessage(websocket.TextMessage, []byte("Unable to handle binary messages"))
-			continue
-		}
-
-		a.broadcastMessage(roomName, chatSession.UserName, message)
+		a.broadcastMessage(roomName, chatSession.UserName, clientMessage)
 	}
 }
 
-func (a *Application) broadcastMessage(roomName, sender string, message []byte) {
+func (a *Application) broadcastMessage(roomName, sender string, message *models.WsClientMessage) {
 	log.Println("Sending message from: " + sender)
 	chatRoom, ok := a.chatRooms[roomName]
-	if ok {
-		for _, user := range chatRoom {
-			// Avoid broadcasting message to sender
-			if user.UserName != sender {
-				if err := user.UserConn.WriteMessage(websocket.TextMessage, message); err != nil {
-					log.Println("Unable to send message to " + user.UserName)
-					continue
-				}
+	if !ok {
+		log.Println("User " + sender + "sent message to an unknown chat room: " + roomName)
+		return
+	}
+	for _, user := range chatRoom {
+		// Avoid broadcasting message to sender
+		if user.UserName != sender {
+			if err := user.UserConn.WriteJSON(&models.WsServerMessage{
+				Error: false,
+				Body:  message,
+			}); err != nil {
+				// Ignore errors
+				continue
 			}
 		}
 	}
