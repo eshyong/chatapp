@@ -20,7 +20,8 @@ import (
 
 const (
 	// TODO: serve from the public npm build directory
-	staticDir = "/frontend/build/"
+	buildDir  = "/frontend/build/"
+	staticDir = "/frontend/build/static"
 	// 1 day
 	cookieMaxAge = 86400
 )
@@ -137,7 +138,7 @@ func (a *Application) checkAuthentication(next http.Handler) http.Handler {
 func (a *Application) indexHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		log.Println("GET /")
-		http.ServeFile(w, r, filepath.Join(a.staticFilesPath, "index.html"))
+		http.ServeFile(w, r, filepath.Join(buildDir, "index.html"))
 	})
 }
 
