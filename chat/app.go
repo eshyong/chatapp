@@ -19,9 +19,8 @@ import (
 )
 
 const (
-	// TODO: serve from the public npm build directory
-	buildDir  = "/frontend/build/"
-	staticDir = "/frontend/build/static"
+	// Output directory of react build
+	buildDir = "/frontend/build/"
 	// 1 day
 	cookieMaxAge = 86400
 )
@@ -69,7 +68,7 @@ func NewApp(hashKey, blockKey string) *Application {
 	return &Application{
 		chatRoomDirectory: make(map[string]*ChatRoom),
 		secureCookie:      securecookie.New([]byte(hashKey), []byte(blockKey)),
-		staticFilesPath:   filepath.Join(".", staticDir),
+		staticFilesPath:   filepath.Join(".", buildDir),
 		upgrader: &websocket.Upgrader{
 			// TODO: Use an environment flag to decide whether to switch on CORS checking
 			CheckOrigin:     func(r *http.Request) bool { return true },
@@ -83,8 +82,9 @@ func NewApp(hashKey, blockKey string) *Application {
 func (a *Application) SetupRouter() *mux.Router {
 	r := mux.NewRouter()
 	r.StrictSlash(true)
-	// Serve static files
-	r.PathPrefix(staticDir).Handler(http.StripPrefix(staticDir, http.FileServer(http.Dir(a.staticFilesPath))))
+
+	// Serve static files at the NPM build root
+	r.PathPrefix("/static/").Handler(http.FileServer(http.Dir(a.staticFilesPath)))
 
 	// Main pages
 	r.Handle("/", a.indexHandler()).Methods("GET")
@@ -138,7 +138,7 @@ func (a *Application) checkAuthentication(next http.Handler) http.Handler {
 func (a *Application) indexHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		log.Println("GET /")
-		http.ServeFile(w, r, filepath.Join(buildDir, "index.html"))
+		http.ServeFile(w, r, filepath.Join(".", buildDir, "index.html"))
 	})
 }
 
