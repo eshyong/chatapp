@@ -86,8 +86,7 @@ func (a *Application) SetupRouter() *mux.Router {
 	// Serve static files at the NPM build root
 	r.PathPrefix("/static/").Handler(http.FileServer(http.Dir(a.staticFilesPath)))
 
-	// Main pages
-	r.Handle("/", a.indexHandler()).Methods("GET")
+	// Login/register routes
 	r.Handle("/login", a.loginHandler()).Methods("POST")
 	r.Handle("/register", a.registrationHandler()).Methods("POST")
 
@@ -100,6 +99,12 @@ func (a *Application) SetupRouter() *mux.Router {
 	// Order matters!
 	api.Handle("/chatroom/list", a.checkAuthentication(a.listChatRoomsHandler())).Methods("GET")
 	api.Handle("/chatroom/{name}", a.checkAuthentication(a.chatRoomHandler())).Methods("GET", "DELETE")
+
+	// Whitelisted routers to get frontend routing to work
+	// Unfortunately, using a wildcard router such as "/{.*}" seems to result in an infinite redirect loop, so we
+	// have to specify each route individually here.
+	r.Handle("/", a.indexHandler()).Methods("GET")
+	r.Handle("/login", a.indexHandler()).Methods("GET")
 	return r
 }
 
@@ -138,7 +143,7 @@ func (a *Application) checkAuthentication(next http.Handler) http.Handler {
 func (a *Application) indexHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		log.Println("GET /")
-		http.ServeFile(w, r, filepath.Join(".", buildDir, "index.html"))
+		http.ServeFile(w, r, filepath.Join(a.staticFilesPath, "index.html"))
 	})
 }
 

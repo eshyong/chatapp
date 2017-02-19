@@ -9,7 +9,7 @@ import './index.css';
 
 function main() {
   let path = window.location.pathname;
-  let Root = NotFound;
+  let Root = <NotFound/>;
 
   if (path === '/') {
     Root = <ChatApp/>;
