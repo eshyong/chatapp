@@ -1,0 +1,2 @@
+CREATE ROLE chatapp WITH LOGIN CREATEDB PASSWORD 'chatapp';
+CREATE DATABASE chatapp WITH OWNER = chatapp;
