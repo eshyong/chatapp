@@ -20,7 +20,7 @@ import (
 
 const (
 	// TODO: serve from the public npm build directory
-	staticDir = "/static/"
+	staticDir = "/frontend/build/"
 	// 1 day
 	cookieMaxAge = 86400
 )
@@ -86,8 +86,8 @@ func (a *Application) SetupRouter() *mux.Router {
 	r.PathPrefix(staticDir).Handler(http.StripPrefix(staticDir, http.FileServer(http.Dir(a.staticFilesPath))))
 
 	// Main pages
-	r.Handle("/", a.checkAuthentication(a.indexHandler())).Methods("GET")
-	r.Handle("/login", a.loginHandler()).Methods("GET", "POST")
+	r.Handle("/", a.indexHandler()).Methods("GET")
+	r.Handle("/login", a.loginHandler()).Methods("POST")
 	r.Handle("/register", a.registrationHandler()).Methods("POST")
 
 	// User auth
@@ -137,20 +137,17 @@ func (a *Application) checkAuthentication(next http.Handler) http.Handler {
 func (a *Application) indexHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		log.Println("GET /")
-		a.serveHtmlPage(w, r, "login")
+		http.ServeFile(w, r, filepath.Join(a.staticFilesPath, "index.html"))
 	})
+}
+
+func (a *Application) serveHtmlPage(w http.ResponseWriter, r *http.Request, name string) {
+	http.ServeFile(w, r, filepath.Join(a.staticFilesPath, name+".html"))
 }
 
 func (a *Application) loginHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case "GET":
-			// Page request
-			a.serveLoginPage(w, r)
-		case "POST":
-			// Login request
-			a.loginUser(w, r)
-		}
+		a.loginUser(w, r)
 	})
 }
 
@@ -221,15 +218,6 @@ func (a *Application) listChatRoomsHandler() http.Handler {
 		w.WriteHeader(http.StatusOK)
 		w.Write(responseBody)
 	})
-}
-
-func (a *Application) serveLoginPage(w http.ResponseWriter, r *http.Request) {
-	log.Println("GET /login")
-	a.serveHtmlPage(w, r, "login")
-}
-
-func (a *Application) serveHtmlPage(w http.ResponseWriter, r *http.Request, name string) {
-	http.ServeFile(w, r, filepath.Join(a.staticFilesPath, "html", name+".html"))
 }
 
 func (a *Application) loginUser(w http.ResponseWriter, r *http.Request) {
