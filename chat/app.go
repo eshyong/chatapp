@@ -452,7 +452,6 @@ func (a *Application) handleChatSession(chatSession *ChatSession, roomName strin
 }
 
 func (a *Application) broadcastMessage(roomName, sender string, body []*models.ChatMessage) {
-	log.Println("Sending message from: " + sender)
 	chatRoom, ok := a.chatRoomDirectory[roomName]
 	if !ok {
 		log.Println("User " + sender + "sent message to an unknown chat room: " + roomName)
