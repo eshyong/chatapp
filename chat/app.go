@@ -196,7 +196,8 @@ func (a *Application) chatRoomHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case "GET":
-			log.Println("GET /chatroom/{name}")
+			name := mux.Vars(r)["name"]
+			log.Println("GET /chatroom/" + name)
 			a.acceptChatConnection(w, r)
 		case "POST":
 			log.Println("POST /chatroom")
