@@ -77,8 +77,8 @@ class ChatRooms extends Component {
   };
 
   render() {
-    let chatRoomList;
-    let errorStyling = { color: 'red' };
+    let chatRoomList,
+        errorStyling = { color: 'red' };
 
     if (this.state.chatRooms.length === 0) {
       chatRoomList = <p><i>No chat rooms available. Try creating one above!</i></p>;
@@ -121,6 +121,16 @@ class ChatWindow extends Component {
     this.state = { newMessage: '' };
   }
 
+  componentDidUpdate() {
+    if (this.props.messages.length > 0) {
+      let className = '.message' + (this.props.messages.length - 1),
+          lastMessage = document.querySelector(className);
+
+      // Scroll to last message typed
+      lastMessage.scrollIntoView();
+    }
+  }
+
   setUserInput = (event) => {
     this.setState({ newMessage: event.target.value });
   };
@@ -158,7 +168,10 @@ class ChatWindow extends Component {
       width: '80%'
     };
     let messages = this.props.messages.map((message, index) => {
-      return <div key={index}>{message.sentBy + ': ' + message.contents}</div>
+      // Create a classname for the message so we can query for it in componentDidUpdate
+      let className = 'message' + index,
+          formattedMessage = message.sentBy + ': ' + message.contents;
+      return <div className={className} key={index}>{formattedMessage}</div>
     });
 
     return (
@@ -225,8 +238,8 @@ class ChatApp extends Component {
   joinChatRoom = (event) => {
     event.preventDefault();
 
-    let roomName = event.target.innerHTML;
-    let apiEndpoint = encodeURI('/api/chatroom/' + roomName);
+    let roomName = event.target.innerHTML,
+        apiEndpoint = encodeURI('/api/chatroom/' + roomName);
 
     this.setState({ chatRoomHeader: roomName });
     this.createWebSocketConnection(apiEndpoint);
@@ -295,8 +308,8 @@ class ChatApp extends Component {
       flexDirection: 'column',
       flex: 1
     };
-    let chatBoxStyling = { flex: 3 };
-    let errorStyling = { color: 'red' };
+    let chatBoxStyling = { flex: 3 },
+        errorStyling = { color: 'red' };
 
     return (
       <div className="Chat" style={chatStyling}>
