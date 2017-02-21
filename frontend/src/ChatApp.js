@@ -161,7 +161,7 @@ class ChatWindow extends Component {
       maxHeight: '400px',
       overflowX: 'hidden',
       overflowY: 'scroll',
-      wordWrap: 'break-word',
+      wordBreak: 'break-all',
     };
     let textStyling = {
       flex: 1,
