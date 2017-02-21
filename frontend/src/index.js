@@ -7,12 +7,12 @@ import NotFound from './NotFound';
 
 import './index.css';
 
-function main() {
+function main(loggedIn) {
   let path = window.location.pathname;
   let Root = <NotFound/>;
 
   if (path === '/') {
-    Root = <ChatApp/>;
+    Root = loggedIn ? <ChatApp/> : <Login/>;
   } else if (path === '/login') {
     Root = <Login/>;
   } else if (path.match(/chatroom\/(\w+)/)) {
@@ -24,4 +24,10 @@ function main() {
   ReactDOM.render(Root, document.getElementById('root'));
 }
 
-main();
+fetch('/user/current', {
+  method: 'GET',
+  credentials: 'same-origin',
+})
+.then((response) => {
+  main(response.ok);
+});
