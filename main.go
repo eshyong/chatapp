@@ -65,8 +65,13 @@ func runAppServer(wg *sync.WaitGroup, httpsPort string) {
 		log.Println("Warning: CHATAPP_COOKIE_SECRET_BLOCK_KEY should be 16, 24, 32 bytes")
 	}
 
+	env := os.Getenv("ENVIRONMENT")
+	if env == "" {
+		env = "dev"
+	}
+
 	// App setup
-	app := chat.NewApp(hashKey, blockKey)
+	app := chat.NewApp(hashKey, blockKey, env)
 	server := &http.Server{
 		Addr:         ":" + httpsPort,
 		ReadTimeout:  5 * time.Second,

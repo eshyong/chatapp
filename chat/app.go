@@ -51,7 +51,7 @@ type Application struct {
 	upgrader *websocket.Upgrader
 }
 
-func NewApp(hashKey, blockKey string) *Application {
+func NewApp(hashKey, blockKey, env string) *Application {
 	// TODO: this is ok for now since postgres is local. If we ever use a remote postgres instance, provision
 	// passwords
 	// TODO: Set schema on connection, so we don't have to specify the schema in all of our queries
@@ -65,13 +65,21 @@ func NewApp(hashKey, blockKey string) *Application {
 		log.Fatal("Unable to connect to database: ", err)
 	}
 
+	var checkOrigin func(r *http.Request) bool
+	if env == "prod" {
+		checkOrigin = nil
+	} else {
+		checkOrigin = func(r *http.Request) bool {
+			return true
+		}
+	}
+
 	return &Application{
 		chatRoomDirectory: make(map[string]*ChatRoom),
 		secureCookie:      securecookie.New([]byte(hashKey), []byte(blockKey)),
 		staticFilesPath:   filepath.Join(".", buildDir),
 		upgrader: &websocket.Upgrader{
-			// TODO: Use an environment flag to decide whether to switch on CORS checking
-			CheckOrigin:     func(r *http.Request) bool { return true },
+			CheckOrigin:     checkOrigin,
 			ReadBufferSize:  4096,
 			WriteBufferSize: 4096,
 		},

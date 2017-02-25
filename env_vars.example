@@ -11,3 +11,6 @@ export CHATAPP_TLS_PRIVATE_KEY=
 # The hash key should be 32 or 64 bytes, while the block key should be 16, 24, or 32 bytes.
 export CHATAPP_COOKIE_SECRET_HASH_KEY=
 export CHATAPP_COOKIE_SECRET_BLOCK_KEY=
+
+# Change this to "prod" if running in production
+export ENVIRONMENT=dev
