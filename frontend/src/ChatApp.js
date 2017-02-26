@@ -87,7 +87,7 @@ class ChatRooms extends Component {
         let roomLink = encodeURI('/chatroom/' + room.roomName);
         return (
           <li key={room.id}>
-            <a href={roomLink} onClick={this.props.joinChatRoom}>{room.roomName}</a>
+            <a href={roomLink} onClick={this.props.joinChatRoomHandler}>{room.roomName}</a>
           </li>
         )
       });
@@ -222,6 +222,10 @@ class ChatApp extends Component {
         response.text().then(this.showError);
       }
     });
+
+    // Get last joined chat room and auto-join
+    let lastRoomJoined = window.localStorage.getItem('lastRoomJoined');
+    this.joinChatRoom(lastRoomJoined);
   }
 
   clearError = () => {
@@ -235,15 +239,19 @@ class ChatApp extends Component {
     });
   };
 
-  joinChatRoom = (event) => {
+  joinChatRoomHandler = (event) => {
     event.preventDefault();
+    this.joinChatRoom(event.target.innerHTML);
+  };
 
-    let roomName = event.target.innerHTML,
-        apiEndpoint = encodeURI('/api/chatroom/' + roomName);
+  joinChatRoom(roomName) {
+    let apiEndpoint = encodeURI(`/api/chatroom/${roomName}`);
 
     this.setState({ chatRoomHeader: roomName });
     this.createWebSocketConnection(apiEndpoint);
-    window.history.pushState({}, '', event.target.href);
+
+    window.localStorage.setItem('lastRoomJoined', roomName);
+    window.history.pushState({}, '', encodeURI(`/chatroom/${roomName}`));
   };
 
   createWebSocketConnection = (relativeUrl) => {
@@ -320,7 +328,7 @@ class ChatApp extends Component {
           <ChatRooms
             style={chatRoomsStyling}
             userName={this.state.userName}
-            joinChatRoom={this.joinChatRoom}
+            joinChatRoomHandler={this.joinChatRoomHandler}
             createWebSocketConnection={this.createWebSocketConnection}
           />
           <ChatWindow
