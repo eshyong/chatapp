@@ -16,7 +16,7 @@ function main(loggedIn) {
   } else if (path === '/login') {
     Root = <Login/>;
   } else if (path.match(/chatroom\/(\w+)/)) {
-    let roomPath = '/api' + path;
+    let roomPath = `/api${path}`;
 
     Root = <ChatApp roomPath={roomPath}/>
   }

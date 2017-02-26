@@ -84,7 +84,7 @@ class ChatRooms extends Component {
       chatRoomList = <p><i>No chat rooms available. Try creating one above!</i></p>;
     } else {
       let chatRoomLinks = this.state.chatRooms.map((room) => {
-        let roomLink = encodeURI('/chatroom/' + room.roomName);
+        let roomLink = encodeURI(`/chatroom/${room.roomName}`);
         return (
           <li key={room.id}>
             <a href={roomLink} onClick={this.props.joinChatRoomHandler}>{room.roomName}</a>
@@ -260,7 +260,10 @@ class ChatApp extends Component {
       this.state.webSocketConn.close();
     }
 
-    let webSocket = new WebSocket('wss://' + window.location.host + relativeUrl);
+    if (!relativeUrl.startsWith('/')) {
+      relativeUrl = `/${relativeUrl}`;
+    }
+    let webSocket = new WebSocket(`wss://${window.location.host}${relativeUrl}`);
     webSocket.onclose = (event) => {
       if (event.code === ABNORMAL_CLOSURE_ERR) {
         this.showError('Could not connect to chat server');
