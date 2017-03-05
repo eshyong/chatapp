@@ -15,10 +15,11 @@ function main(loggedIn) {
     Root = loggedIn ? <ChatApp/> : <Login/>;
   } else if (path === '/login') {
     Root = <Login/>;
-  } else if (path.match(/chatroom\/(\w+)/)) {
-    let roomPath = `/api${path}`;
+  } else if (path.match(/chatroom\/([^/]+)/)) {
+    let matches = path.match(/chatroom\/([^/]+)/),
+        roomName = matches[matches.length - 1];
 
-    Root = <ChatApp roomPath={roomPath}/>
+    Root = <ChatApp roomToJoin={decodeURI(roomName)}/>
   }
 
   ReactDOM.render(Root, document.getElementById('root'));

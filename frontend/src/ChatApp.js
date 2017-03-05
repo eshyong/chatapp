@@ -223,9 +223,13 @@ class ChatApp extends Component {
       }
     });
 
-    // Get last joined chat room and auto-join
-    let lastRoomJoined = window.localStorage.getItem('lastRoomJoined');
-    this.joinChatRoom(lastRoomJoined);
+    let roomName;
+    if (this.props.roomToJoin) {
+      roomName = this.props.roomToJoin;
+    } else {
+      roomName = window.localStorage.getItem('lastRoomJoined');
+    }
+    this.joinChatRoom(roomName);
   }
 
   clearError = () => {
@@ -241,17 +245,18 @@ class ChatApp extends Component {
 
   joinChatRoomHandler = (event) => {
     event.preventDefault();
+
     this.joinChatRoom(event.target.innerHTML);
   };
 
   joinChatRoom(roomName) {
-    let apiEndpoint = encodeURI(`/api/chatroom/${roomName}`);
+    let apiEndpoint = `/api/chatroom/${roomName}`;
 
     this.setState({ chatRoomHeader: roomName });
     this.createWebSocketConnection(apiEndpoint);
 
     window.localStorage.setItem('lastRoomJoined', roomName);
-    window.history.pushState({}, '', encodeURI(`/chatroom/${roomName}`));
+    window.history.pushState({}, '', `/chatroom/${roomName}`);
   };
 
   createWebSocketConnection = (relativeUrl) => {
