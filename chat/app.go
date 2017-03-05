@@ -106,13 +106,15 @@ func (a *Application) SetupRouter() *mux.Router {
 	api.Handle("/chatroom", a.checkAuthentication(a.chatRoomHandler())).Methods("POST")
 	// Order matters!
 	api.Handle("/chatroom/list", a.checkAuthentication(a.listChatRoomsHandler())).Methods("GET")
-	api.Handle("/chatroom/{name}", a.checkAuthentication(a.chatRoomHandler())).Methods("GET", "DELETE")
+	api.Handle("/chatroom/{name}", a.checkAuthentication(a.chatRoomHandler())).Methods("DELETE")
+	api.Handle("/chatroom/{name}/join", a.checkAuthentication(a.chatRoomHandler())).Methods("GET")
 
 	// Whitelisted routers to get frontend routing to work
 	// Unfortunately, using a wildcard router such as "/{.*}" seems to result in an infinite redirect loop, so we
 	// have to specify each route individually here.
 	r.Handle("/", a.indexHandler()).Methods("GET")
 	r.Handle("/login", a.indexHandler()).Methods("GET")
+	r.Handle("/chatroom/{name}", a.indexHandler()).Methods("GET")
 	return r
 }
 
@@ -205,7 +207,7 @@ func (a *Application) chatRoomHandler() http.Handler {
 		switch r.Method {
 		case "GET":
 			name := mux.Vars(r)["name"]
-			log.Println("GET /chatroom/" + name)
+			log.Println("GET /chatroom/" + name + "/join")
 			a.acceptChatConnection(w, r)
 		case "POST":
 			log.Println("POST /chatroom")

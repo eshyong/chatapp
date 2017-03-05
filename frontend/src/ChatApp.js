@@ -250,7 +250,7 @@ class ChatApp extends Component {
   };
 
   joinChatRoom(roomName) {
-    let apiEndpoint = `/api/chatroom/${roomName}`;
+    let apiEndpoint = `/api/chatroom/${roomName}/join`;
 
     this.setState({ chatRoomHeader: roomName });
     this.createWebSocketConnection(apiEndpoint);
