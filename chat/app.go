@@ -22,7 +22,8 @@ const (
 	// Output directory of react build
 	buildDir = "/frontend/build/"
 	// 1 day
-	cookieMaxAge = 86400
+	cookieMaxAge        = 86400
+	defaultErrorMessage = "Sorry, something went wrong. Please try again later"
 )
 
 type ChatSession struct {
@@ -182,19 +183,17 @@ func (a *Application) registrationHandler() http.Handler {
 
 		if err := a.registerUser(registerRequest); err != nil {
 			log.Println("Application.registerUser: ", err)
-			if pqErr, ok := err.(*pq.Error); ok {
-				if pqErr.Code.Name() == "unique_violation" {
-					http.Error(w, "A user with that name already exists", http.StatusBadRequest)
-					return
-				}
+			errMessage := defaultErrorMessage
+			if pqErr, ok := err.(*pq.Error); ok && pqErr.Code.Name() == "unique_violation" {
+				errMessage = "A user with that name already exists"
 			}
-			http.Error(w, "Sorry, something went wrong. Please try again later", http.StatusInternalServerError)
+			http.Error(w, errMessage, http.StatusInternalServerError)
 			return
 		}
 
 		if err := a.createUserSession(w, r, registerRequest.UserName); err != nil {
 			log.Println("Application.createUserSession: ", err)
-			http.Error(w, "Sorry, something went wrong. Please try again later", http.StatusInternalServerError)
+			http.Error(w, defaultErrorMessage, http.StatusInternalServerError)
 			return
 		}
 		w.WriteHeader(http.StatusOK)
@@ -223,7 +222,7 @@ func (a *Application) listChatRoomsHandler() http.Handler {
 		chatRoomList, err := a.repository.ListChatRooms()
 		if err != nil {
 			log.Println(err)
-			http.Error(w, "Sorry, try again later", http.StatusInternalServerError)
+			http.Error(w, defaultErrorMessage, http.StatusInternalServerError)
 			return
 		}
 		responseBody, err := json.Marshal(chatRoomList)
@@ -252,11 +251,11 @@ func (a *Application) loginUser(w http.ResponseWriter, r *http.Request) {
 	user, err := a.repository.FindUserByName(loginRequest.UserName)
 	if err != nil {
 		log.Println("UserRepository.FindUserByName: ", err)
+		message := defaultErrorMessage
 		if err == sql.ErrNoRows {
-			http.Error(w, "No user found with that name", http.StatusBadRequest)
-			return
+			message = "No user found with that name"
 		}
-		http.Error(w, "Sorry, something went wrong. Please try again later", http.StatusInternalServerError)
+		http.Error(w, message, http.StatusInternalServerError)
 		return
 	}
 
@@ -350,13 +349,11 @@ func (a *Application) createChatRoom(w http.ResponseWriter, r *http.Request) {
 
 	err := a.repository.CreateChatRoom(createRequest.RoomName, createRequest.CreatedBy)
 	if err != nil {
-		if pqErr, ok := err.(*pq.Error); ok {
-			if pqErr.Code.Name() == "unique_violation" {
-				http.Error(w, "A chat room with that name has already been created", http.StatusBadRequest)
-				return
-			}
+		message := defaultErrorMessage
+		if pqErr, ok := err.(*pq.Error); ok && pqErr.Code.Name() == "unique_violation" {
+			message = "A chat room with that name has already been created"
 		}
-		http.Error(w, "Sorry, something went wrong. Please try again later", http.StatusInternalServerError)
+		http.Error(w, message, http.StatusInternalServerError)
 		return
 	}
 	w.WriteHeader(http.StatusOK)
@@ -394,17 +391,13 @@ func (a *Application) acceptChatConnection(w http.ResponseWriter, r *http.Reques
 	roomName := mux.Vars(r)["name"]
 	roomModel, err := a.repository.FindChatRoomByName(roomName)
 	if err != nil {
+		reason := defaultErrorMessage
 		if err == sql.ErrNoRows {
-			conn.WriteJSON(&models.WsServerMessage{
-				Error:  true,
-				Reason: "Could not find room with that name",
-			})
-			conn.Close()
-			return
+			reason = "Could not find room with that name"
 		}
 		conn.WriteJSON(&models.WsServerMessage{
 			Error:  true,
-			Reason: "Sorry, please try again later",
+			Reason: reason,
 		})
 		conn.Close()
 		return
