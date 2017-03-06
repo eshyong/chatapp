@@ -3,10 +3,7 @@ package utils
 import (
 	"encoding/json"
 	"io/ioutil"
-	"log"
 	"net/http"
-
-	"github.com/lib/pq"
 )
 
 func UnmarshalJsonRequest(r *http.Request, model interface{}) error {
@@ -20,14 +17,4 @@ func UnmarshalJsonRequest(r *http.Request, model interface{}) error {
 		return err
 	}
 	return nil
-}
-
-func HandlePqError(w http.ResponseWriter, pqErr *pq.Error, uniqueMessage string) {
-	log.Println(pqErr.Code.Name())
-	switch pqErr.Code.Name() {
-	case "unique_violation":
-		http.Error(w, uniqueMessage, http.StatusBadRequest)
-	default:
-		http.Error(w, "Sorry, something went wrong. Please try again later.", http.StatusInternalServerError)
-	}
 }
