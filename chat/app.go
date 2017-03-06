@@ -54,7 +54,6 @@ type Application struct {
 func NewApp(hashKey, blockKey, env string) *Application {
 	// TODO: this is ok for now since postgres is local. If we ever use a remote postgres instance, provision
 	// passwords
-	// TODO: Set schema on connection, so we don't have to specify the schema in all of our queries
 	dbConn, err := sql.Open("postgres", "postgres://chatapp:chatapp@localhost/chatapp?sslmode=disable")
 	if err != nil {
 		log.Fatal(err)
