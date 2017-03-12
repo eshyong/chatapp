@@ -165,7 +165,31 @@ func (app *Application) serveHtmlPage(w http.ResponseWriter, r *http.Request, na
 
 func (app *Application) loginHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		app.loginUser(w, r)
+		log.Println("POST /login")
+		loginRequest := &models.LoginRequest{}
+		if err := utils.UnmarshalJsonRequest(r, loginRequest); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		if loginRequest.UserName == "" || loginRequest.Password == "" {
+			http.Error(w, `"username" and "password" fields cannot be empty`, http.StatusBadRequest)
+			return
+		}
+
+		err := app.authService.LoginUser(loginRequest)
+		if err != nil {
+			http.Error(w, err.Message, err.Code)
+			return
+		}
+
+		cookie, err := app.authService.CreateUserSession(loginRequest.UserName)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		http.SetCookie(w, cookie)
+		w.WriteHeader(http.StatusOK)
 	})
 }
 
@@ -231,34 +255,6 @@ func (app *Application) listChatRoomsHandler() http.Handler {
 		w.WriteHeader(http.StatusOK)
 		w.Write(responseBody)
 	})
-}
-
-func (app *Application) loginUser(w http.ResponseWriter, r *http.Request) {
-	log.Println("POST /login")
-	loginRequest := &models.LoginRequest{}
-	if err := utils.UnmarshalJsonRequest(r, loginRequest); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	if loginRequest.UserName == "" || loginRequest.Password == "" {
-		http.Error(w, `"username" and "password" fields cannot be empty`, http.StatusBadRequest)
-		return
-	}
-
-	err := app.authService.LoginUser(loginRequest)
-	if err != nil {
-		http.Error(w, err.Message, err.Code)
-		return
-	}
-
-	cookie, err := app.authService.CreateUserSession(loginRequest.UserName)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	http.SetCookie(w, cookie)
-	w.WriteHeader(http.StatusOK)
 }
 
 func (app *Application) isUserAuthenticated(r *http.Request) bool {
