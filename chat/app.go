@@ -3,26 +3,23 @@ package chat
 import (
 	"database/sql"
 	"encoding/json"
-	"errors"
 	"log"
 	"net/http"
 	"path/filepath"
 
 	"github.com/eshyong/chatapp/chat/models"
 	"github.com/eshyong/chatapp/chat/repository"
+	"github.com/eshyong/chatapp/chat/service/auth"
 	"github.com/eshyong/chatapp/chat/utils"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/securecookie"
 	"github.com/gorilla/websocket"
 	"github.com/lib/pq"
-	"golang.org/x/crypto/bcrypt"
 )
 
 const (
 	// Output directory of react build
-	buildDir = "/frontend/build/"
-	// 1 day
-	cookieMaxAge        = 86400
+	buildDir            = "/frontend/build/"
 	defaultErrorMessage = "Sorry, something went wrong. Please try again later"
 )
 
@@ -43,9 +40,11 @@ type Application struct {
 	// A repository object used for database access
 	repository *repository.Repository
 
+	// Service handling all authentication
+	authService *auth.AuthService
+
 	// HTTP routing/security
 	router          *mux.Router
-	secureCookie    *securecookie.SecureCookie
 	staticFilesPath string
 
 	// Websocket connector
@@ -53,7 +52,7 @@ type Application struct {
 }
 
 func NewApp(hashKey, blockKey, env string) *Application {
-	// TODO: this is ok for now since postgres is local. If we ever use a remote postgres instance, provision
+	// TODO: this is ok for now since postgres is local. If I ever use a remote postgres instance, should provision
 	// passwords
 	dbConn, err := sql.Open("postgres", "postgres://chatapp:chatapp@localhost/chatapp?sslmode=disable")
 	if err != nil {
@@ -74,16 +73,19 @@ func NewApp(hashKey, blockKey, env string) *Application {
 		}
 	}
 
+	repo := repository.New(dbConn)
+	secureCookie := securecookie.New([]byte(hashKey), []byte(blockKey))
+
 	return &Application{
+		authService:       auth.NewAuthenticationService(secureCookie, repo),
 		chatRoomDirectory: make(map[string]*ChatRoom),
-		secureCookie:      securecookie.New([]byte(hashKey), []byte(blockKey)),
 		staticFilesPath:   filepath.Join(".", buildDir),
+		repository:        repo,
 		upgrader: &websocket.Upgrader{
 			CheckOrigin:     checkOrigin,
 			ReadBufferSize:  4096,
 			WriteBufferSize: 4096,
 		},
-		repository: repository.NewUserRepository(dbConn),
 	}
 }
 
@@ -118,9 +120,9 @@ func (a *Application) SetupRouter() *mux.Router {
 	return r
 }
 
-func (a *Application) userInfo() http.Handler {
+func (app *Application) userInfo() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		user, err := a.getUserInfo(r)
+		user, err := app.authService.GetUserInfo(r)
 		if err != nil {
 			if err == http.ErrNoCookie {
 				http.Error(w, "Your session expired. Please login again", http.StatusBadRequest)
@@ -167,7 +169,7 @@ func (a *Application) loginHandler() http.Handler {
 	})
 }
 
-func (a *Application) registrationHandler() http.Handler {
+func (app *Application) registrationHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		log.Println("POST /register")
 		registerRequest := &models.RegisterRequest{}
@@ -181,21 +183,17 @@ func (a *Application) registrationHandler() http.Handler {
 			return
 		}
 
-		if err := a.registerUser(registerRequest); err != nil {
-			log.Println("Application.registerUser: ", err)
-			errMessage := defaultErrorMessage
-			if pqErr, ok := err.(*pq.Error); ok && pqErr.Code.Name() == "unique_violation" {
-				errMessage = "A user with that name already exists"
-			}
-			http.Error(w, errMessage, http.StatusInternalServerError)
+		if err := app.authService.RegisterUser(registerRequest); err != nil {
+			http.Error(w, err.Message, err.Code)
 			return
 		}
 
-		if err := a.createUserSession(w, r, registerRequest.UserName); err != nil {
-			log.Println("Application.createUserSession: ", err)
-			http.Error(w, defaultErrorMessage, http.StatusInternalServerError)
+		cookie, err := app.authService.CreateUserSession(registerRequest.UserName)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+		http.SetCookie(w, cookie)
 		w.WriteHeader(http.StatusOK)
 	})
 }
@@ -235,10 +233,10 @@ func (a *Application) listChatRoomsHandler() http.Handler {
 	})
 }
 
-func (a *Application) loginUser(w http.ResponseWriter, r *http.Request) {
+func (app *Application) loginUser(w http.ResponseWriter, r *http.Request) {
 	log.Println("POST /login")
-	var loginRequest models.LoginRequest
-	if err := utils.UnmarshalJsonRequest(r, &loginRequest); err != nil {
+	loginRequest := &models.LoginRequest{}
+	if err := utils.UnmarshalJsonRequest(r, loginRequest); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -248,91 +246,27 @@ func (a *Application) loginUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := a.repository.FindUserByName(loginRequest.UserName)
+	err := app.authService.LoginUser(loginRequest)
 	if err != nil {
-		log.Println("UserRepository.FindUserByName: ", err)
-		message := defaultErrorMessage
-		if err == sql.ErrNoRows {
-			message = "No user found with that name"
-		}
-		http.Error(w, message, http.StatusInternalServerError)
+		http.Error(w, err.Message, err.Code)
 		return
 	}
 
-	hashedPassword := user.Password
-	if err := bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(loginRequest.Password)); err != nil {
-		log.Println("bcrypt.CompareHashAndPassword: ", err)
-		http.Error(w, "Invalid password", http.StatusBadRequest)
+	cookie, err := app.authService.CreateUserSession(loginRequest.UserName)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-
-	if err := a.createUserSession(w, r, loginRequest.UserName); err != nil {
-		log.Println("Application.createUserSession: ", err)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
+	http.SetCookie(w, cookie)
 	w.WriteHeader(http.StatusOK)
 }
 
-func (a *Application) createUserSession(w http.ResponseWriter, r *http.Request, userName string) error {
-	log.Println("createUserSession")
-	session := map[string]string{
-		"userName":      userName,
-		"authenticated": "true",
-	}
-	cookieName := "userSession"
-	encoded, err := a.secureCookie.Encode(cookieName, session)
-	if err != nil {
-		log.Println("Unable to set cookie")
-		return err
-	}
-	cookie := &http.Cookie{
-		Name:     cookieName,
-		Value:    encoded,
-		Path:     "/",
-		Secure:   true,
-		HttpOnly: true,
-		MaxAge:   cookieMaxAge,
-	}
-	http.SetCookie(w, cookie)
-	log.Println("Authenticated user " + userName)
-	return nil
-}
-
-func (a *Application) getUserInfo(r *http.Request) (*models.UserInfo, error) {
-	cookieName := "userSession"
-	cookie, err := r.Cookie(cookieName)
-	if err != nil {
-		log.Println(err.Error())
-		return nil, err
-	}
-	var sessionValues map[string]string
-	if err = a.secureCookie.Decode(cookieName, cookie.Value, &sessionValues); err != nil {
-		log.Println(err)
-		return nil, err
-	}
-
-	return &models.UserInfo{
-		Authenticated: sessionValues["authenticated"] == "true",
-		UserName:      sessionValues["userName"],
-	}, nil
-}
-
-func (a *Application) isUserAuthenticated(r *http.Request) bool {
-	userInfo, err := a.getUserInfo(r)
+func (app *Application) isUserAuthenticated(r *http.Request) bool {
+	userInfo, err := app.authService.GetUserInfo(r)
 	if err != nil {
 		return false
 	}
 	return userInfo.Authenticated
-}
-
-func (a *Application) registerUser(r *models.RegisterRequest) error {
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(r.Password), bcrypt.DefaultCost)
-	if err != nil {
-		return errors.New("bcrypt hash failed")
-	}
-
-	return a.repository.InsertUser(r.UserName, string(hashedPassword))
 }
 
 func (a *Application) createChatRoom(w http.ResponseWriter, r *http.Request) {
@@ -377,7 +311,7 @@ func (a *Application) acceptChatConnection(w http.ResponseWriter, r *http.Reques
 	log.Println("User connected from " + conn.RemoteAddr().String())
 
 	// Get user info if possible, and send an error message if not
-	userInfo, err := a.getUserInfo(r)
+	userInfo, err := a.authService.GetUserInfo(r)
 	if err != nil {
 		conn.WriteJSON(&models.WsServerMessage{
 			Error:  true,

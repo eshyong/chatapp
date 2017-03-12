@@ -11,7 +11,7 @@ type Repository struct {
 	dbConn *sql.DB
 }
 
-func NewUserRepository(dbConn *sql.DB) *Repository {
+func New(dbConn *sql.DB) *Repository {
 	return &Repository{dbConn: dbConn}
 }
 
