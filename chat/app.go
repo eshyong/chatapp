@@ -89,35 +89,35 @@ func NewApp(hashKey, blockKey, env string) *Application {
 	}
 }
 
-func (a *Application) SetupRouter() *mux.Router {
-	r := mux.NewRouter()
-	r.StrictSlash(true)
+func (app *Application) SetupRouter() *mux.Router {
+	router := mux.NewRouter()
+	router.StrictSlash(true)
 
 	// Serve static files at the NPM build root
-	r.PathPrefix("/static/").Handler(http.FileServer(http.Dir(a.staticFilesPath)))
+	router.PathPrefix("/static/").Handler(http.FileServer(http.Dir(app.staticFilesPath)))
 
 	// Login/register routes
-	r.Handle("/login", a.loginHandler()).Methods("POST")
-	r.Handle("/register", a.registrationHandler()).Methods("POST")
+	router.Handle("/login", app.loginHandler()).Methods("POST")
+	router.Handle("/register", app.registrationHandler()).Methods("POST")
 
 	// User auth
-	r.Handle("/user/current", a.userInfo())
+	router.Handle("/user/current", app.userInfo())
 
 	// API router
-	api := r.PathPrefix("/api").Subrouter()
-	api.Handle("/chatroom", a.checkAuthentication(a.chatRoomHandler())).Methods("POST")
+	api := router.PathPrefix("/api").Subrouter()
+	api.Handle("/chatroom", app.checkAuthentication(app.chatRoomHandler())).Methods("POST")
 	// Order matters!
-	api.Handle("/chatroom/list", a.checkAuthentication(a.listChatRoomsHandler())).Methods("GET")
-	api.Handle("/chatroom/{name}", a.checkAuthentication(a.chatRoomHandler())).Methods("DELETE")
-	api.Handle("/chatroom/{name}/join", a.checkAuthentication(a.chatRoomHandler())).Methods("GET")
+	api.Handle("/chatroom/list", app.checkAuthentication(app.listChatRoomsHandler())).Methods("GET")
+	api.Handle("/chatroom/{name}", app.checkAuthentication(app.chatRoomHandler())).Methods("DELETE")
+	api.Handle("/chatroom/{name}/join", app.checkAuthentication(app.chatRoomHandler())).Methods("GET")
 
 	// Whitelisted routers to get frontend routing to work
 	// Unfortunately, using a wildcard router such as "/{.*}" seems to result in an infinite redirect loop, so we
 	// have to specify each route individually here.
-	r.Handle("/", a.indexHandler()).Methods("GET")
-	r.Handle("/login", a.indexHandler()).Methods("GET")
-	r.Handle("/chatroom/{name}", a.indexHandler()).Methods("GET")
-	return r
+	router.Handle("/", app.indexHandler()).Methods("GET")
+	router.Handle("/login", app.indexHandler()).Methods("GET")
+	router.Handle("/chatroom/{name}", app.indexHandler()).Methods("GET")
+	return router
 }
 
 func (app *Application) userInfo() http.Handler {
@@ -142,9 +142,9 @@ func (app *Application) userInfo() http.Handler {
 	})
 }
 
-func (a *Application) checkAuthentication(next http.Handler) http.Handler {
+func (app *Application) checkAuthentication(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !a.isUserAuthenticated(r) && r.URL.Path != "/login" {
+		if !app.isUserAuthenticated(r) && r.URL.Path != "/login" {
 			http.Error(w, "Please login to access the app", http.StatusUnauthorized)
 		} else {
 			next.ServeHTTP(w, r)
@@ -152,20 +152,20 @@ func (a *Application) checkAuthentication(next http.Handler) http.Handler {
 	})
 }
 
-func (a *Application) indexHandler() http.Handler {
+func (app *Application) indexHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		log.Println("GET /")
-		http.ServeFile(w, r, filepath.Join(a.staticFilesPath, "index.html"))
+		http.ServeFile(w, r, filepath.Join(app.staticFilesPath, "index.html"))
 	})
 }
 
-func (a *Application) serveHtmlPage(w http.ResponseWriter, r *http.Request, name string) {
-	http.ServeFile(w, r, filepath.Join(a.staticFilesPath, name+".html"))
+func (app *Application) serveHtmlPage(w http.ResponseWriter, r *http.Request, name string) {
+	http.ServeFile(w, r, filepath.Join(app.staticFilesPath, name+".html"))
 }
 
-func (a *Application) loginHandler() http.Handler {
+func (app *Application) loginHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		a.loginUser(w, r)
+		app.loginUser(w, r)
 	})
 }
 
@@ -198,26 +198,26 @@ func (app *Application) registrationHandler() http.Handler {
 	})
 }
 
-func (a *Application) chatRoomHandler() http.Handler {
+func (app *Application) chatRoomHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case "GET":
 			name := mux.Vars(r)["name"]
 			log.Println("GET /chatroom/" + name + "/join")
-			a.acceptChatConnection(w, r)
+			app.acceptChatConnection(w, r)
 		case "POST":
 			log.Println("POST /chatroom")
-			a.createChatRoom(w, r)
+			app.createChatRoom(w, r)
 		case "DELETE":
 			log.Println("DELETE /chatroom/{name}")
-			a.deleteChatRoom(w, r)
+			app.deleteChatRoom(w, r)
 		}
 	})
 }
 
-func (a *Application) listChatRoomsHandler() http.Handler {
+func (app *Application) listChatRoomsHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		chatRoomList, err := a.repository.ListChatRooms()
+		chatRoomList, err := app.repository.ListChatRooms()
 		if err != nil {
 			log.Println(err)
 			http.Error(w, defaultErrorMessage, http.StatusInternalServerError)
@@ -269,7 +269,7 @@ func (app *Application) isUserAuthenticated(r *http.Request) bool {
 	return userInfo.Authenticated
 }
 
-func (a *Application) createChatRoom(w http.ResponseWriter, r *http.Request) {
+func (app *Application) createChatRoom(w http.ResponseWriter, r *http.Request) {
 	var createRequest models.CreateChatRoomRequest
 	if err := utils.UnmarshalJsonRequest(r, &createRequest); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -281,7 +281,7 @@ func (a *Application) createChatRoom(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err := a.repository.CreateChatRoom(createRequest.RoomName, createRequest.CreatedBy)
+	err := app.repository.CreateChatRoom(createRequest.RoomName, createRequest.CreatedBy)
 	if err != nil {
 		message := defaultErrorMessage
 		if pqErr, ok := err.(*pq.Error); ok && pqErr.Code.Name() == "unique_violation" {
@@ -293,17 +293,17 @@ func (a *Application) createChatRoom(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-func (a *Application) deleteChatRoom(w http.ResponseWriter, r *http.Request) {
+func (app *Application) deleteChatRoom(w http.ResponseWriter, r *http.Request) {
 	roomName := mux.Vars(r)["name"]
-	if err := a.repository.DeleteChatRoom(roomName); err != nil {
+	if err := app.repository.DeleteChatRoom(roomName); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 	w.WriteHeader(http.StatusOK)
 }
 
-func (a *Application) acceptChatConnection(w http.ResponseWriter, r *http.Request) {
+func (app *Application) acceptChatConnection(w http.ResponseWriter, r *http.Request) {
 	// Create websocket connection
-	conn, err := a.upgrader.Upgrade(w, r, nil)
+	conn, err := app.upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Println(err)
 		return
@@ -311,7 +311,7 @@ func (a *Application) acceptChatConnection(w http.ResponseWriter, r *http.Reques
 	log.Println("User connected from " + conn.RemoteAddr().String())
 
 	// Get user info if possible, and send an error message if not
-	userInfo, err := a.authService.GetUserInfo(r)
+	userInfo, err := app.authService.GetUserInfo(r)
 	if err != nil {
 		conn.WriteJSON(&models.WsServerMessage{
 			Error:  true,
@@ -323,7 +323,7 @@ func (a *Application) acceptChatConnection(w http.ResponseWriter, r *http.Reques
 
 	// Check if chat room exists in database
 	roomName := mux.Vars(r)["name"]
-	roomModel, err := a.repository.FindChatRoomByName(roomName)
+	roomModel, err := app.repository.FindChatRoomByName(roomName)
 	if err != nil {
 		reason := defaultErrorMessage
 		if err == sql.ErrNoRows {
@@ -336,7 +336,7 @@ func (a *Application) acceptChatConnection(w http.ResponseWriter, r *http.Reques
 		conn.Close()
 		return
 	}
-	chatHistory, err := a.repository.GetChatMessagesByRoomId(roomModel.Id)
+	chatHistory, err := app.repository.GetChatMessagesByRoomId(roomModel.Id)
 	if err != nil {
 		log.Println(err)
 		conn.Close()
@@ -349,7 +349,7 @@ func (a *Application) acceptChatConnection(w http.ResponseWriter, r *http.Reques
 	})
 
 	// Search for an active chat room session, or create one if not present
-	chatRoom, ok := a.chatRoomDirectory[roomName]
+	chatRoom, ok := app.chatRoomDirectory[roomName]
 	if !ok {
 		chatRoom = &ChatRoom{
 			roomId:       roomModel.Id,
@@ -363,11 +363,11 @@ func (a *Application) acceptChatConnection(w http.ResponseWriter, r *http.Reques
 		UserConn: conn,
 	}
 	chatRoom.chatSessions = append(chatRoom.chatSessions, newChatSession)
-	a.chatRoomDirectory[roomName] = chatRoom
-	go a.handleChatSession(newChatSession, roomName)
+	app.chatRoomDirectory[roomName] = chatRoom
+	go app.handleChatSession(newChatSession, roomName)
 }
 
-func (a *Application) handleChatSession(chatSession *ChatSession, roomName string) {
+func (app *Application) handleChatSession(chatSession *ChatSession, roomName string) {
 	defer chatSession.UserConn.Close()
 	for {
 		clientMessage := &models.ChatMessage{}
@@ -378,18 +378,18 @@ func (a *Application) handleChatSession(chatSession *ChatSession, roomName strin
 			break
 		}
 
-		if room, ok := a.chatRoomDirectory[roomName]; ok {
-			if err := a.repository.InsertChatMessage(room.roomId, clientMessage); err != nil {
+		if room, ok := app.chatRoomDirectory[roomName]; ok {
+			if err := app.repository.InsertChatMessage(room.roomId, clientMessage); err != nil {
 				log.Println("Unable to insert chat message: " + err.Error())
 			}
 		}
 		body := []*models.ChatMessage{clientMessage}
-		a.broadcastMessage(roomName, chatSession.UserName, body)
+		app.broadcastMessage(roomName, chatSession.UserName, body)
 	}
 }
 
-func (a *Application) broadcastMessage(roomName, sender string, body []*models.ChatMessage) {
-	chatRoom, ok := a.chatRoomDirectory[roomName]
+func (app *Application) broadcastMessage(roomName, sender string, body []*models.ChatMessage) {
+	chatRoom, ok := app.chatRoomDirectory[roomName]
 	if !ok {
 		log.Println("User " + sender + "sent message to an unknown chat room: " + roomName)
 		return
